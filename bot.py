@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, time
 from zoneinfo import ZoneInfo
 
 from openai import AsyncOpenAI
@@ -29,8 +29,6 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip()
 
-# Railway Volume support.
-# If a Railway Volume is mounted, Railway exposes its mount path here.
 VOLUME_PATH = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
 
 if VOLUME_PATH:
@@ -57,19 +55,14 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-
                 chat_id INTEGER NOT NULL,
                 message_id INTEGER NOT NULL,
-
                 user_id INTEGER,
                 username TEXT,
                 display_name TEXT,
-
                 text TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
-
                 reply_to_message_id INTEGER,
-
                 UNIQUE(chat_id, message_id)
             )
             """
@@ -81,7 +74,6 @@ def init_db():
                 chat_id INTEGER NOT NULL,
                 report_date TEXT NOT NULL,
                 report_count INTEGER NOT NULL DEFAULT 0,
-
                 PRIMARY KEY (chat_id, report_date)
             )
             """
@@ -145,16 +137,10 @@ def get_daily_report_count(chat_id):
             WHERE chat_id = ?
               AND report_date = ?
             """,
-            (
-                chat_id,
-                today,
-            ),
+            (chat_id, today),
         ).fetchone()
 
-    if row:
-        return row["report_count"]
-
-    return 0
+    return row["report_count"] if row else 0
 
 
 def increment_daily_report_count(chat_id):
@@ -169,15 +155,11 @@ def increment_daily_report_count(chat_id):
                 report_count
             )
             VALUES (?, ?, 1)
-
             ON CONFLICT(chat_id, report_date)
             DO UPDATE SET
                 report_count = report_count + 1
             """,
-            (
-                chat_id,
-                today,
-            ),
+            (chat_id, today),
         )
 
 
@@ -194,33 +176,24 @@ async def save_message(
     if not message:
         return
 
-    # Do not store messages sent by bots.
     if message.from_user and message.from_user.is_bot:
         return
 
-    # Store text or media caption.
     text = message.text or message.caption
 
     if not text:
         return
 
-    # Do not store commands in the chat history.
     if text.startswith("/"):
         return
 
     user = message.from_user
 
-    user_id = None
-    username = None
-    display_name = None
-
-    if user:
-        user_id = user.id
-        username = user.username
-        display_name = user.full_name
+    user_id = user.id if user else None
+    username = user.username if user else None
+    display_name = user.full_name if user else None
 
     reply_to_message_id = None
-
     if message.reply_to_message:
         reply_to_message_id = message.reply_to_message.message_id
 
@@ -250,10 +223,7 @@ def get_messages_for_period(
     if message_limit is None:
         message_limit = MAX_MESSAGES
     else:
-        message_limit = min(
-            max(message_limit, 1),
-            MAX_MESSAGES,
-        )
+        message_limit = min(max(message_limit, 1), MAX_MESSAGES)
 
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
 
@@ -282,7 +252,6 @@ def get_messages_for_period(
             ),
         ).fetchall()
 
-    # Give the AI messages in chronological order.
     return list(reversed(rows))
 
 
@@ -297,10 +266,7 @@ def format_messages_for_ai(messages):
         username = msg["username"]
         display_name = msg["display_name"] or "Без імені"
 
-        if username:
-            author = f"@{username}"
-        else:
-            author = display_name
+        author = f"@{username}" if username else display_name
 
         line = (
             f'[id={msg["message_id"]}] '
@@ -332,7 +298,6 @@ COMMON_RULES = """
 Кожне повідомлення має id.
 
 Якщо повідомлення містить:
-
 reply_to=123
 
 це означає, що воно є відповіддю на повідомлення id=123.
@@ -376,11 +341,9 @@ Reply-ланцюжок може бути однією дискусією.
 при згадуванні використовуй саме @nickname.
 
 Наприклад:
-
 "Ціпочка @forestwitch показала свій урожай грибів."
 
 Якщо username немає, можна використовувати display name:
-
 "Ціпочка Марія..."
 
 Не вигадуй username.
@@ -413,9 +376,7 @@ SHORT_PROMPT = COMMON_RULES + """
 Формат:
 
 • Перша тема.
-
 • Друга тема.
-
 • Третя тема.
 """
 
@@ -462,10 +423,7 @@ async def create_ai_summary(
 ):
     conversation = format_messages_for_ai(messages)
 
-    if detailed:
-        instructions = DETAILED_PROMPT
-    else:
-        instructions = SHORT_PROMPT
+    instructions = DETAILED_PROMPT if detailed else SHORT_PROMPT
 
     response = await client.responses.create(
         model=OPENAI_MODEL,
@@ -477,7 +435,6 @@ async def create_ai_summary(
         ),
     )
 
-    # Show token usage only in Railway/Terminal logs.
     if response.usage:
         print("")
         print("===== OPENAI TOKEN USAGE =====")
@@ -502,32 +459,19 @@ def parse_zvit_args(args):
     for arg in args:
         arg = arg.lower().strip()
 
-        if arg in (
-            "detailed",
-            "detail",
-            "full",
-        ):
+        if arg in ("detailed", "detail", "full"):
             detailed = True
             continue
 
-        if arg in (
-            "24h",
-            "1d",
-        ):
+        if arg in ("24h", "1d"):
             hours = 24
             continue
 
-        if arg in (
-            "2d",
-            "48h",
-        ):
+        if arg in ("2d", "48h"):
             hours = 48
             continue
 
-        if arg in (
-            "3d",
-            "72h",
-        ):
+        if arg in ("3d", "72h"):
             hours = 72
             continue
 
@@ -535,24 +479,16 @@ def parse_zvit_args(args):
             count = int(arg)
 
             if count < 1:
-                raise ValueError(
-                    "Message count must be positive"
-                )
+                raise ValueError("Message count must be positive")
 
             if count > MAX_MESSAGES:
-                raise ValueError(
-                    "Too many messages"
-                )
+                raise ValueError("Too many messages")
 
             message_limit = count
-
-            # For N-message reports, never look back more than 72 hours.
             hours = MAX_HOURS
             continue
 
-        raise ValueError(
-            f"Unknown argument: {arg}"
-        )
+        raise ValueError(f"Unknown argument: {arg}")
 
     return hours, message_limit, detailed
 
@@ -564,13 +500,10 @@ def parse_zvit_args(args):
 def get_period_text(hours):
     if hours == 24:
         return "останні 24 години"
-
     if hours == 48:
         return "останні 2 дні"
-
     if hours == 72:
         return "останні 3 дні"
-
     return f"останні {hours} годин"
 
 
@@ -581,8 +514,7 @@ def build_report_header(
 ):
     if requested_message_limit is not None:
         period_text = (
-            f"останні "
-            f"{requested_message_limit} повідомлень "
+            f"останні {requested_message_limit} повідомлень "
             f"(не старіше 3 днів)"
         )
     else:
@@ -612,10 +544,7 @@ async def send_long_message(
     current = ""
 
     for paragraph in text.split("\n\n"):
-        if current:
-            candidate = current + "\n\n" + paragraph
-        else:
-            candidate = paragraph
+        candidate = current + ("\n\n" if current else "") + paragraph
 
         if len(candidate) <= max_length:
             current = candidate
@@ -637,6 +566,103 @@ async def send_long_message(
 
 
 # =========================================================
+# DAILY TOP CHICKEN
+# =========================================================
+
+def get_top_chicken(chat_id):
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    with get_db() as db:
+        row = db.execute(
+            """
+            SELECT
+                user_id,
+                username,
+                display_name,
+                COUNT(*) AS message_count
+            FROM messages
+            WHERE chat_id = ?
+              AND timestamp >= ?
+              AND user_id IS NOT NULL
+            GROUP BY
+                user_id,
+                username,
+                display_name
+            ORDER BY
+                message_count DESC
+            LIMIT 1
+            """,
+            (
+                chat_id,
+                since.isoformat(),
+            ),
+        ).fetchone()
+
+    return row
+
+
+def get_active_chat_ids():
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    with get_db() as db:
+        rows = db.execute(
+            """
+            SELECT DISTINCT chat_id
+            FROM messages
+            WHERE timestamp >= ?
+            """,
+            (since.isoformat(),),
+        ).fetchall()
+
+    return [row["chat_id"] for row in rows]
+
+
+async def daily_top_chicken(
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    chat_ids = get_active_chat_ids()
+
+    for chat_id in chat_ids:
+        top = get_top_chicken(chat_id)
+
+        if not top:
+            continue
+
+        username = top["username"]
+        display_name = top["display_name"]
+
+        if username:
+            chicken_name = f"@{username}"
+        elif display_name:
+            chicken_name = display_name
+        else:
+            continue
+
+        text = (
+            "🐔 Ціпаріум доповідає, що найбільше "
+            f"сьогодні квохтала {chicken_name}"
+        )
+
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+            )
+
+            print(
+                f"Daily top chicken for {chat_id}: "
+                f"{chicken_name} "
+                f"({top['message_count']} messages)"
+            )
+
+        except Exception as e:
+            print(
+                f"Daily top chicken error "
+                f"for chat {chat_id}: {repr(e)}"
+            )
+
+
+# =========================================================
 # /zvit COMMAND
 # =========================================================
 
@@ -649,10 +675,7 @@ async def zvit(
     if not message:
         return
 
-    # Daily report limit per chat.
-    current_count = get_daily_report_count(
-        message.chat_id
-    )
+    current_count = get_daily_report_count(message.chat_id)
 
     if current_count >= MAX_REPORTS_PER_DAY:
         await message.reply_text(
@@ -663,11 +686,7 @@ async def zvit(
         return
 
     try:
-        (
-            hours,
-            message_limit,
-            detailed,
-        ) = parse_zvit_args(
+        hours, message_limit, detailed = parse_zvit_args(
             context.args
         )
 
@@ -719,16 +738,12 @@ async def zvit(
             detailed=detailed,
         )
 
-        # Only successful AI reports consume the daily quota.
         increment_daily_report_count(
             message.chat_id
         )
 
     except Exception as e:
-        print(
-            "OpenAI error:",
-            repr(e),
-        )
+        print("OpenAI error:", repr(e))
 
         await message.reply_text(
             "Не вдалося створити "
@@ -801,8 +816,7 @@ def main():
 
     app.add_handler(
         MessageHandler(
-            filters.TEXT
-            & ~filters.COMMAND,
+            filters.TEXT & ~filters.COMMAND,
             save_message,
         )
     )
@@ -816,6 +830,17 @@ def main():
 
     app.add_error_handler(
         error_handler
+    )
+
+    # Щодня о 23:00 за київським часом.
+    app.job_queue.run_daily(
+        daily_top_chicken,
+        time=time(
+            hour=23,
+            minute=0,
+            tzinfo=KYIV_TZ,
+        ),
+        name="daily_top_chicken",
     )
 
     print("Ципаріум запущено 🐔")
