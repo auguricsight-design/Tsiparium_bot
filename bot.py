@@ -579,7 +579,7 @@ async def zvit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not messages:
         await message.reply_text(
-            "За цей період немає повідомлень для створення Сводок Ципаріума."
+            "Недостатньо квохтали для створення Сводок Ципаріума."
         )
         return
 
