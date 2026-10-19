@@ -2,6 +2,8 @@ import os
 import sqlite3
 import base64
 import random
+import json
+import re
 
 from datetime import datetime, timedelta, timezone, time
 from zoneinfo import ZoneInfo
@@ -95,6 +97,18 @@ def init_db():
             """
         )
 
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_cipa_visuals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                generated_at TEXT NOT NULL,
+                visual_prompt TEXT NOT NULL,
+                elements_json TEXT NOT NULL
+            )
+            """
+        )
+
 
 def save_message_to_db(
     chat_id,
@@ -132,6 +146,56 @@ def save_message_to_db(
                 reply_to_message_id,
             ),
         )
+
+
+
+def save_daily_cipa_visuals(chat_id, visual_prompt, elements):
+    with get_db() as db:
+        db.execute(
+            """
+            INSERT INTO daily_cipa_visuals (
+                chat_id,
+                generated_at,
+                visual_prompt,
+                elements_json
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                chat_id,
+                datetime.now(timezone.utc).isoformat(),
+                visual_prompt,
+                json.dumps(elements, ensure_ascii=False),
+            ),
+        )
+
+
+def get_latest_daily_cipa_visuals(chat_id):
+    with get_db() as db:
+        row = db.execute(
+            """
+            SELECT generated_at, visual_prompt, elements_json
+            FROM daily_cipa_visuals
+            WHERE chat_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (chat_id,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    try:
+        elements = json.loads(row["elements_json"])
+    except Exception:
+        elements = []
+
+    return {
+        "generated_at": row["generated_at"],
+        "visual_prompt": row["visual_prompt"],
+        "elements": elements,
+    }
 
 
 # =========================================================
@@ -674,36 +738,42 @@ async def build_daily_image_prompt(messages):
     conversation = format_messages_for_ai(messages)
 
     instructions = """
-Ти створюєш prompt для генерації ілюстрації.
+Ти готуєш дані для генерації Daily Cipa — ілюстрації за мотивами
+Telegram-чату за останні 24 години.
 
-Проаналізуй історію Telegram-чату за останні 24 години
-і створи ОДИН короткий, чіткий prompt українською мовою
-для генератора зображень.
+Поверни ВАЛІДНИЙ JSON без markdown у форматі:
 
-Вимоги до картинки:
+{
+  "prompt": "готовий prompt для генератора зображень",
+  "elements": [
+    {
+      "element": "коротка назва візуального елемента",
+      "reason": "яка тема чату стала причиною його додавання"
+    }
+  ]
+}
+
+Вимоги до prompt:
 - головний персонаж: курка;
 - стиль: кольоровий скетч, живий, виразний, милий, з легким гумором;
-- курка має бути оточена предметами, символами, їжею, дрібними сценками
-  або атрибутами, які відображають головні теми чату за останні 24 години;
-- обирай приблизно 4-8 найважливіших тем;
-- якщо в чаті були люди, не малюй реалістичних портретів учасників;
-- не додавай читабельного тексту в саме зображення;
-- композиція має бути цілісною, як одна ілюстрація, а не колаж із квадратиків;
-- фон світлий або нейтральний;
-- картинка має бути декоративною, атмосферною і зрозумілою.
+- 4-8 ключових тем чату мають бути представлені предметами,
+  символами або дрібними сценками;
+- не малюй реалістичних портретів;
+- не додавай читабельного тексту;
+- композиція цілісна, не сітка і не колаж.
 
-Поверни тільки готовий prompt для генерації зображення.
-Без пояснень.
-Без списків.
-Без лапок навколо відповіді.
+Вимоги до elements:
+- включай лише ключові елементи, які свідомо закладаєш у prompt;
+- для кожного коротко поясни, з якої теми чату він походить;
+- не вигадуй тем;
+- не включай саму курку, якщо курка не була темою чату.
 """
 
     response = await client.responses.create(
         model=OPENAI_MODEL,
         input=(
             instructions
-            + "\n\n"
-            + "ІСТОРІЯ ЧАТУ:\n\n"
+            + "\n\nІСТОРІЯ ЧАТУ:\n\n"
             + conversation
         ),
     )
@@ -720,19 +790,64 @@ async def build_daily_image_prompt(messages):
         print("======================================================")
         print("")
 
-    return response.output_text.strip()
+    raw = response.output_text.strip()
+
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+    data = json.loads(raw)
+
+    visual_prompt = str(data.get("prompt", "")).strip()
+    elements = data.get("elements", [])
+
+    if not visual_prompt:
+        raise ValueError("Daily Cipa visual prompt is empty")
+
+    clean_elements = []
+
+    if isinstance(elements, list):
+        for item in elements:
+            if not isinstance(item, dict):
+                continue
+
+            element = str(item.get("element", "")).strip()
+            reason = str(item.get("reason", "")).strip()
+
+            if element and reason:
+                clean_elements.append(
+                    {
+                        "element": element,
+                        "reason": reason,
+                    }
+                )
+
+    print("")
+    print(
+        f"===== DAILY CIPA VISUAL ELEMENTS | "
+        f"{human_log_time()} ====="
+    )
+
+    for item in clean_elements:
+        print(f"• {item['element']} — {item['reason']}")
+
+    print("==============================================")
+    print("")
+
+    return visual_prompt, clean_elements
 
 
 async def generate_daily_chicken_image(messages):
-    visual_prompt = await build_daily_image_prompt(messages)
+    visual_prompt, elements = await build_daily_image_prompt(
+        messages
+    )
 
     final_prompt = (
         "Створи ілюстрацію у стилі кольорового скетчу. "
         "Головний персонаж — виразна симпатична курка. "
         "Курка має бути оточена об'єктами та дрібними візуальними сценками, "
         "що відображають теми чату за останні 24 години. "
-        "Не додавай текст у зображення. "
-        "Ось змістовний prompt:\n\n"
+        "Не додавай текст у зображення.\n\n"
         f"{visual_prompt}"
     )
 
@@ -750,7 +865,7 @@ async def generate_daily_chicken_image(messages):
     image_file.name = "ciparium_daily_chicken.png"
     image_file.seek(0)
 
-    return image_file
+    return image_file, visual_prompt, elements
 
 
 # =========================================================
@@ -805,20 +920,27 @@ async def send_daily_cipa(
         shuffled_chickens
     )
 
-    image_file = await generate_daily_chicken_image(
+    image_file, visual_prompt, elements = await generate_daily_chicken_image(
         messages
     )
 
     caption = (
         "🐔 Ціпаріум сьогодні виглядає так, "
         "а кіпішу наводили "
-        f"{chicken_names}"
+        f"{chicken_names}\n\n"
+        "#dailycipa"
     )
 
     await context.bot.send_photo(
         chat_id=chat_id,
         photo=image_file,
         caption=caption,
+    )
+
+    save_daily_cipa_visuals(
+        chat_id=chat_id,
+        visual_prompt=visual_prompt,
+        elements=elements,
     )
 
     print(
@@ -925,6 +1047,76 @@ async def dailycipa(
         await message.reply_text(
             "🐔 Не вдалося згенерувати Daily Cipa."
         )
+
+
+async def dailycipawhy(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    message = update.effective_message
+    user = update.effective_user
+
+    if not message or not user:
+        return
+
+    try:
+        admin = await is_chat_admin(
+            chat_id=message.chat_id,
+            user_id=user.id,
+            context=context,
+        )
+    except Exception as e:
+        print(
+            f"[{human_log_time()}] "
+            f"Admin check error "
+            f"for chat {message.chat_id}: {repr(e)}"
+        )
+        await message.reply_text(
+            "🐔 Не вдалося перевірити права адміністратора."
+        )
+        return
+
+    if not admin:
+        await message.reply_text(
+            "🐔 Команда /dailycipawhy доступна "
+            "тільки адміністраторам чату."
+        )
+        return
+
+    data = get_latest_daily_cipa_visuals(
+        message.chat_id
+    )
+
+    if not data:
+        await message.reply_text(
+            "🐔 Ще немає збереженого пояснення "
+            "для Daily Cipa."
+        )
+        return
+
+    elements = data["elements"]
+
+    if not elements:
+        await message.reply_text(
+            "🐔 Для останньої Daily Cipa "
+            "список візуальних елементів не збережено."
+        )
+        return
+
+    lines = [
+        "🐔 Чому Daily Cipa виглядає саме так:",
+        "",
+    ]
+
+    for item in elements:
+        lines.append(
+            f"• {item['element']} — {item['reason']}"
+        )
+
+    await send_long_message(
+        message,
+        "\n".join(lines),
+    )
 
 
 # =========================================================
@@ -1097,6 +1289,13 @@ def main():
         CommandHandler(
             "dailycipa",
             dailycipa,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "dailycipawhy",
+            dailycipawhy,
         )
     )
 
