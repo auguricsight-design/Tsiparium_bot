@@ -16,7 +16,7 @@ from config import (
     OPENAI_IMAGE_QUALITY,
     KYIV_TZ,
 )
-from commands import human_log_time
+from commands import human_log_time, cipahow
 from db import (
     init_db,
     save_message,
@@ -82,6 +82,13 @@ def main():
         CommandHandler(
             "zvit",
             zvit,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "cipahow",
+            cipahow,
         )
     )
 
