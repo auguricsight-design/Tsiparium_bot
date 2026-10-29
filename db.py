@@ -250,6 +250,9 @@ async def save_message(
         reply_to_message_id=reply_to_message_id,
     )
 
+
+
+async def cleanup_old_data_job(context):
     cleanup_old_data()
 
 

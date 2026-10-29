@@ -20,6 +20,7 @@ from commands import human_log_time, cipahow
 from db import (
     init_db,
     save_message,
+    cleanup_old_data_job,
 )
 from reports import zvit
 from daily_cipa import (
@@ -147,6 +148,16 @@ def main():
             tzinfo=KYIV_TZ,
         ),
         name="daily_chicken_image_job",
+    )
+
+    app.job_queue.run_daily(
+        cleanup_old_data_job,
+        time=time(
+            hour=0,
+            minute=10,
+            tzinfo=KYIV_TZ,
+        ),
+        name="daily_cleanup_job",
     )
 
     print(
