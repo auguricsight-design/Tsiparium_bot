@@ -13,17 +13,41 @@ from config import (
     OPENAI_IMAGE_MODEL,
     OPENAI_IMAGE_SIZE,
     OPENAI_IMAGE_QUALITY,
+    PORTRAIT_COOLDOWN_DAYS,
+    KYIV_TZ,
 )
 from commands import (
     human_log_time,
     send_long_message,
 )
-from db import (
-    get_messages_by_username,
+
+from datetime import datetime, timedelta
+
+from messages_db import get_messages_by_username
+from visuals_db import (
     save_cipa_portrait_visuals,
     get_latest_cipa_portrait_visuals,
+    get_recent_cipa_portrait_cooldown,
 )
 from reports import format_messages_for_ai
+
+
+
+def format_portrait_cooldown_time(generated_at):
+    dt = datetime.fromisoformat(
+        generated_at
+    )
+    next_allowed = (
+        dt
+        + timedelta(
+            days=PORTRAIT_COOLDOWN_DAYS
+        )
+    ).astimezone(
+        KYIV_TZ
+    )
+    return next_allowed.strftime(
+        "%d.%m.%Y %H:%M"
+    )
 
 
 async def build_cipa_portrait_prompt(
@@ -261,6 +285,26 @@ async def portrait(
         await message.reply_text(
             "🐔 Вкажи нікнейм "
             "у форматі @nickname."
+        )
+        return
+
+    recent_portrait_generated_at = (
+        get_recent_cipa_portrait_cooldown(
+            chat_id=message.chat_id,
+            username=requested_username,
+        )
+    )
+
+    if recent_portrait_generated_at:
+        next_available = format_portrait_cooldown_time(
+            recent_portrait_generated_at
+        )
+        await message.reply_text(
+            "🐔 Портрет для цієї ціпулі вже "
+            "генерували протягом останніх "
+            f"{PORTRAIT_COOLDOWN_DAYS} днів.\n\n"
+            "Спробуйте знову після: "
+            f"{next_available}"
         )
         return
 

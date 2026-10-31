@@ -12,9 +12,11 @@ from commands import (
     human_log_time,
     send_long_message,
 )
-from db import (
+from messages_db import (
     get_messages_for_period,
     get_messages_by_username,
+)
+from reports_db import (
     get_daily_report_count,
     increment_daily_report_count,
 )

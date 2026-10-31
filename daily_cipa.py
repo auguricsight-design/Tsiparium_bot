@@ -21,10 +21,12 @@ from commands import (
     is_chat_admin,
     send_long_message,
 )
-from db import (
+from messages_db import (
     get_messages_for_period,
     get_top_chickens,
     get_active_chat_ids,
+)
+from visuals_db import (
     save_daily_cipa_visuals,
     get_latest_daily_cipa_visuals,
 )

@@ -103,7 +103,12 @@ async def cipahow(
         "за темами цієї ціпочки за останні 5 днів.\n"
         "• /lastcipawhy — пояснює ключові елементи останнього "
         "персонального портрета.\n"
-        "• /cipahow — показує цей список команд.\n\n"
+        "• /cipahow — показує цей список команд.\n"
+        "• /cipainfo — інформація про Ціпаріум (заготовка).\n"
+        "• /gameadd — запускає додавання нової гри через приватний діалог із ботом.\n"
+        "• /gamestop — завершити активну гру (заготовка).\n"
+        "• /cipagamelimit — показує максимальну кількість одночасно "
+        "активних ігор у чаті.\n\n"
         "Тільки для адмінів чату:\n"
         "• /dailycipa — вручну запускає Daily Cipa: картинка за темами "
         "останніх 24 годин + топ-3 активних ціпочок у випадковому порядку.\n"
@@ -115,4 +120,80 @@ async def cipahow(
     await send_long_message(
         message,
         text,
+    )
+
+
+async def welcome_new_members(
+    update,
+    context,
+):
+    message = update.effective_message
+
+    if not message or not message.new_chat_members:
+        return
+
+    for member in message.new_chat_members:
+        if member.is_bot:
+            continue
+
+        if member.username:
+            member_name = f"@{member.username}"
+        else:
+            member_name = member.full_name
+
+        welcome_text = (
+            f"{member_name}, вітаю в Ціпаріумі!\n\n"
+            "У нас тут багато кіпішу й приємна тепла атмосфера. "
+            "Щоб вона лишалася такою ж — ознайомся з правилами чату, будь ласка. "
+            "Знайти їх можна за командою /ciparules.\n\n"
+            "А ще ми постійно граємо в щось цікаве. "
+            "Актуальні ігри доступні за командою /cipagames.\n\n"
+            "А загалом — шалом та велкам! Показуй котів/собак, їжу чи вишивку — "
+            "ми раді всьому :)"
+        )
+
+        await message.reply_text(
+            welcome_text
+        )
+
+
+async def ciparules(
+    update,
+    context,
+):
+    message = update.effective_message
+
+    if not message:
+        return
+
+    await message.reply_text(
+        "🐔 Правила Ціпаріума скоро з'являться тут."
+    )
+
+
+async def cipagames(
+    update,
+    context,
+):
+    message = update.effective_message
+
+    if not message:
+        return
+
+    await message.reply_text(
+        "🎮 Список актуальних ігор скоро з'явиться тут."
+    )
+
+
+async def cipainfo(
+    update,
+    context,
+):
+    message = update.effective_message
+
+    if not message:
+        return
+
+    await message.reply_text(
+        "🐔 Інформація про Ціпаріум скоро з'явиться тут."
     )

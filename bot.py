@@ -16,12 +16,19 @@ from config import (
     OPENAI_IMAGE_QUALITY,
     KYIV_TZ,
 )
-from commands import human_log_time, cipahow
+from commands import (
+    human_log_time,
+    cipahow,
+    ciparules,
+    cipagames,
+    cipainfo,
+    welcome_new_members,
+)
 from db import (
     init_db,
-    save_message,
     cleanup_old_data_job,
 )
+from messages_db import save_message
 from reports import zvit
 from daily_cipa import (
     dailycipa,
@@ -31,6 +38,15 @@ from daily_cipa import (
 from portraits import (
     portrait,
     lastcipawhy,
+)
+from games import (
+    gameadd,
+    game_private_start,
+    game_private_message,
+    game_cancel,
+    gamestop,
+    cipagamelimit,
+    game_status_refresh_job,
 )
 
 
@@ -95,6 +111,63 @@ def main():
 
     app.add_handler(
         CommandHandler(
+            "cipainfo",
+            cipainfo,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "ciparules",
+            ciparules,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "cipagames",
+            cipagames,
+        )
+    )
+
+
+    app.add_handler(
+        CommandHandler(
+            "start",
+            game_private_start,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "cancel",
+            game_cancel,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "gameadd",
+            gameadd,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "gamestop",
+            gamestop,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "cipagamelimit",
+            cipagamelimit,
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
             "dailycipa",
             dailycipa,
         )
@@ -123,7 +196,24 @@ def main():
 
     app.add_handler(
         MessageHandler(
-            filters.TEXT
+            filters.StatusUpdate.NEW_CHAT_MEMBERS,
+            welcome_new_members,
+        )
+    )
+
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.PRIVATE
+            & filters.TEXT
+            & ~filters.COMMAND,
+            game_private_message,
+        )
+    )
+
+    app.add_handler(
+        MessageHandler(
+            ~filters.ChatType.PRIVATE
+            & filters.TEXT
             & ~filters.COMMAND,
             save_message,
         )
@@ -138,6 +228,13 @@ def main():
 
     app.add_error_handler(
         error_handler
+    )
+
+    app.job_queue.run_repeating(
+        game_status_refresh_job,
+        interval=60,
+        first=10,
+        name="game_status_refresh_job",
     )
 
     app.job_queue.run_daily(
