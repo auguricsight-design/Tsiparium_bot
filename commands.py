@@ -4,6 +4,7 @@ from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes
 
 from config import KYIV_TZ
+from content_db import get_static_content
 
 
 def human_log_time():
@@ -93,22 +94,15 @@ async def cipahow(
         "ті самі періоди у годинах.\n"
         "• /zvit N — звіт за останні N повідомлень, максимум 1000 "
         "і не старіше 5 днів.\n"
-        "• /zvit detailed — детальний звіт за 24 години.\n"
-        "• /zvit 2d detailed, /zvit 3d detailed, /zvit 4d detailed, "
-        "/zvit 5d detailed — детальний звіт за вибраний період.\n"
-        "• /zvit N detailed — детальний звіт за останні N повідомлень.\n"
-        "• /zvit cipa @nickname — короткий підсумок повідомлень "
-        "конкретної ціпочки за останні 24 години.\n"
         "• /portrait cipa @nickname — персональний портрет-курочка "
         "за темами цієї ціпочки за останні 5 днів.\n"
         "• /lastcipawhy — пояснює ключові елементи останнього "
         "персонального портрета.\n"
         "• /cipahow — показує цей список команд.\n"
-        "• /cipainfo — інформація про Ціпаріум (заготовка).\n"
+        "• /cipainfo — корисна інформація Ціпаріуму.\n"
         "• /gameadd — запускає додавання нової гри через приватний діалог із ботом.\n"
-        "• /gamestop — завершити активну гру (заготовка).\n"
-        "• /cipagamelimit — показує максимальну кількість одночасно "
-        "активних ігор у чаті.\n\n"
+        "• /gamestop ID — завершити гру; доступно автору гри або адміну.\n"
+        "• /cipagamelimit — показує кількість активних ігор і ліміт у чаті.\n\n"
         "Тільки для адмінів чату:\n"
         "• /dailycipa — вручну запускає Daily Cipa: картинка за темами "
         "останніх 24 годин + топ-3 активних ціпочок у випадковому порядку.\n"
@@ -148,6 +142,9 @@ async def welcome_new_members(
             "Знайти їх можна за командою /ciparules.\n\n"
             "А ще ми постійно граємо в щось цікаве. "
             "Актуальні ігри доступні за командою /cipagames.\n\n"
+            "Також у чаті працює бот для зручності та веселощів. "
+            "Усі його команди та корисну інформацію можна переглянути за командою "
+            "/cipahow або в закріпленому повідомленні.\n\n"
             "А загалом — шалом та велкам! Показуй котів/собак, їжу чи вишивку — "
             "ми раді всьому :)"
         )
@@ -166,8 +163,19 @@ async def ciparules(
     if not message:
         return
 
-    await message.reply_text(
-        "🐔 Правила Ціпаріума скоро з'являться тут."
+    rules_text = get_static_content(
+        "ciparules"
+    )
+
+    if not rules_text:
+        await message.reply_text(
+            "🐔 Правила Ціпаріума поки недоступні."
+        )
+        return
+
+    await send_long_message(
+        message,
+        rules_text,
     )
 
 
@@ -195,5 +203,5 @@ async def cipainfo(
         return
 
     await message.reply_text(
-        "🐔 Інформація про Ціпаріум скоро з'явиться тут."
+        "🐔 Корисна інформація Ціпаріуму скоро з'явиться тут."
     )

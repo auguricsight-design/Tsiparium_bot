@@ -14,7 +14,6 @@ from commands import (
 )
 from messages_db import (
     get_messages_for_period,
-    get_messages_by_username,
 )
 from reports_db import (
     get_daily_report_count,
@@ -137,68 +136,16 @@ SHORT_PROMPT = COMMON_RULES + """
 """
 
 
-DETAILED_PROMPT = COMMON_RULES + """
-
-СТИЛЬ:
-
-Створи детальний, але компактний звіт.
-
-Для кожної основної теми:
-
-1. Дай коротку назву.
-2. У 2-4 реченнях поясни, про що йшла розмова.
-3. Збережи важливі конкретні деталі.
-4. Якщо був конкретний результат або висновок,
-   коротко його зазнач.
-5. Якщо авторство важливе,
-   використовуй формат "ціпочка @nickname".
-
-Не переказуй повідомлення одне за одним.
-Не створюй заголовок всього звіту.
-Не вказуй період.
-Не вказуй кількість повідомлень.
-"""
-
-
-CIPA_PROMPT = """
-Ти аналізуєш повідомлення однієї конкретної ціпочки
-в Telegram-чаті за останні 24 години.
-
-Завдання:
-- коротко підсумуй, про що саме писала ця ціпочка;
-- згрупуй повідомлення за темами;
-- не переказуй кожне повідомлення окремо;
-- ігноруй короткі реакції, привітання, окремі емодзі,
-  "так", "ні", "+", "ага", "ок" та інші репліки без
-  самостійного змісту;
-- не вигадуй фактів;
-- якщо одна тема повторювалась, об'єднай її;
-- не роби психологічних висновків про людину;
-- не оцінюй особистість ціпочки;
-- описуй лише зміст її повідомлень.
-
-Формат:
-• Тема — короткий підсумок у 1-2 реченнях.
-
-Не створюй заголовок.
-Не вказуй кількість повідомлень.
-Не вказуй період.
-"""
 
 
 async def create_ai_summary(
     messages,
-    detailed=False,
 ):
     conversation = format_messages_for_ai(
         messages
     )
 
-    instructions = (
-        DETAILED_PROMPT
-        if detailed
-        else SHORT_PROMPT
-    )
+    instructions = SHORT_PROMPT
 
     response = await client.responses.create(
         model=OPENAI_MODEL,
@@ -235,41 +182,12 @@ async def create_ai_summary(
     return response.output_text.strip()
 
 
-async def create_cipa_summary(
-    messages,
-):
-    conversation = format_messages_for_ai(
-        messages
-    )
-
-    response = await client.responses.create(
-        model=OPENAI_MODEL,
-        input=(
-            CIPA_PROMPT
-            + "\n\n"
-            + "ПОВІДОМЛЕННЯ ЦІПОЧКИ:\n\n"
-            + conversation
-        ),
-    )
-
-    return response.output_text.strip()
-
-
 def parse_zvit_args(args):
     hours = 24
     message_limit = None
-    detailed = False
-
     for arg in args:
         arg = arg.lower().strip()
 
-        if arg in (
-            "detailed",
-            "detail",
-            "full",
-        ):
-            detailed = True
-            continue
 
         if arg in (
             "24h",
@@ -330,7 +248,6 @@ def parse_zvit_args(args):
     return (
         hours,
         message_limit,
-        detailed,
     )
 
 
@@ -396,88 +313,10 @@ async def zvit(
         )
         return
 
-    # /zvit cipa @nickname
-    if (
-        context.args
-        and context.args[0].lower() == "cipa"
-    ):
-        if len(context.args) < 2:
-            await message.reply_text(
-                "🐔 Формат команди:\n"
-                "/zvit cipa @nickname"
-            )
-            return
-
-        requested_username = (
-            context.args[1].strip()
-        )
-
-        if not requested_username.startswith("@"):
-            await message.reply_text(
-                "🐔 Вкажи нікнейм "
-                "у форматі @nickname."
-            )
-            return
-
-        messages = get_messages_by_username(
-            chat_id=message.chat_id,
-            username=requested_username,
-            hours=24,
-        )
-
-        if not messages:
-            await message.reply_text(
-                f"🐔 За останні 24 години "
-                f"не знайшов повідомлень від "
-                f"{requested_username}."
-            )
-            return
-
-        await message.reply_text(
-            f"🐣 Ціпаріум аналізує балачки "
-            f"{requested_username}..."
-        )
-
-        try:
-            summary = await create_cipa_summary(
-                messages
-            )
-
-            increment_daily_report_count(
-                message.chat_id
-            )
-
-        except Exception as e:
-            print(
-                f"[{human_log_time()}] "
-                f"Cipa report OpenAI error: "
-                f"{repr(e)}"
-            )
-
-            await message.reply_text(
-                "🐔 Не вдалося створити "
-                "звіт по ціпочці."
-            )
-            return
-
-        header = (
-            "Сводки Ципаріума\n"
-            f"Ціпочка: "
-            f"{requested_username}\n"
-            "Період: останні 24 години\n\n"
-        )
-
-        await send_long_message(
-            message,
-            header + summary,
-        )
-        return
-
     try:
         (
             hours,
             message_limit,
-            detailed,
         ) = parse_zvit_args(
             context.args
         )
@@ -500,12 +339,6 @@ async def zvit(
             "/zvit 5d\n"
             "/zvit 500\n"
             "/zvit 1000\n"
-            "/zvit detailed\n"
-            "/zvit 500 detailed\n"
-            "/zvit 2d detailed\n"
-            "/zvit 3d detailed\n"
-            "/zvit 5d detailed\n"
-            "/zvit cipa @nickname"
         )
         return
 
@@ -530,7 +363,6 @@ async def zvit(
     try:
         summary = await create_ai_summary(
             messages=messages,
-            detailed=detailed,
         )
 
         increment_daily_report_count(

@@ -3,8 +3,12 @@ from datetime import datetime, timedelta, timezone
 
 from telegram.ext import ContextTypes
 
-from config import DB_PATH, MESSAGE_RETENTION_DAYS
-from commands import human_log_time
+from config import DB_PATH, MESSAGE_RETENTION_DAYS, KYIV_TZ
+from migrations import run_migrations
+
+
+def human_log_time():
+    return datetime.now(KYIV_TZ).strftime("%d.%m.%Y %H:%M:%S")
 
 
 def get_db():
@@ -66,6 +70,15 @@ def init_db():
         )
         db.execute(
             """
+            CREATE TABLE IF NOT EXISTS static_content (
+                key TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id INTEGER NOT NULL,
@@ -83,25 +96,7 @@ def init_db():
             """
         )
 
-        game_columns = {
-            row["name"]
-            for row in db.execute("PRAGMA table_info(games)").fetchall()
-        }
-        migrations = {
-            "start_at": "TEXT",
-            "finish_at": "TEXT",
-            "author": "TEXT",
-            "author_user_id": "INTEGER",
-            "prizes": "TEXT",
-            "hashtag": "TEXT",
-            "status": "TEXT NOT NULL DEFAULT 'pending'",
-            "created_at": "TEXT",
-        }
-        for column, column_type in migrations.items():
-            if column not in game_columns:
-                db.execute(
-                    f"ALTER TABLE games ADD COLUMN {column} {column_type}"
-                )
+        run_migrations(db)
 
 
 def cleanup_old_data():
