@@ -8,10 +8,11 @@ from config import MAX_ACTIVE_GAMES, KYIV_TZ
 from content_db import get_static_content
 from commands import is_chat_admin, send_cipainfo_menu, send_long_message
 from game_db import (
-    add_game,
+    refresh_game_statuses,
+    add_game_with_limit,
+    ActiveGameLimitReached,
     mark_game_completed,
     get_game_by_id,
-    activate_pending_games,
     get_active_games_count,
 )
 
@@ -19,8 +20,8 @@ from game_db import (
 GAME_FIELDS = [
     ("name", "🎮 Як називається гра?"),
     ("rules", "📜 Напиши правила гри."),
-    ("start_at", "🟢 Коли стартує гра? Вкажи дату й час у форматі ДД.ММ.РРРР ГГ:ХХ за Києвом."),
-    ("finish_at", "🏁 Коли фінішує гра? Вкажи дату й час у форматі ДД.ММ.РРРР ГГ:ХХ за Києвом."),
+    ("start_at", "🟢 Коли стартує гра? Вкажи дату у форматі ДД.ММ.РРРР."),
+    ("finish_at", "🏁 Коли фінішує гра? Вкажи дату у форматі ДД.ММ.РРРР."),
     ("prizes", "🏆 Які призи передбачені? Якщо призів немає — напиши «немає»."),
     ("hashtag", "#️⃣ Вкажи хештег гри, наприклад #моягра."),
 ]
@@ -28,6 +29,13 @@ GAME_FIELDS = [
 
 
 logger = logging.getLogger(__name__)
+
+def parse_game_start_date(value):
+    return datetime.strptime(
+        value,
+        "%d.%m.%Y",
+    ).date()
+
 
 def parse_game_datetime(value):
     return datetime.strptime(
@@ -42,18 +50,8 @@ def format_game_datetime(dt):
     )
 
 
-def get_initial_game_status(start_dt, finish_dt):
-    now = datetime.now(KYIV_TZ)
-    if now < start_dt:
-        return "pending"
-    if start_dt <= now < finish_dt:
-        return "active"
-    return "active"
-
-
 async def game_status_refresh_job(context):
-    now_iso = datetime.now(KYIV_TZ).isoformat()
-    activate_pending_games(now_iso)
+    refresh_game_statuses()
 
 
 async def gameadd(update, context):
@@ -69,8 +67,7 @@ async def gameadd(update, context):
         )
         return
 
-    now_iso = datetime.now(KYIV_TZ).isoformat()
-    activate_pending_games(now_iso)
+    refresh_game_statuses(chat_id)
     active_count = get_active_games_count(
         message.chat_id
     )
@@ -177,8 +174,7 @@ async def game_private_start(update, context):
         )
         return
 
-    now_iso = datetime.now(KYIV_TZ).isoformat()
-    activate_pending_games(now_iso)
+    refresh_game_statuses(chat_id)
     active_count = get_active_games_count(
         chat_id
     )
@@ -239,32 +235,56 @@ async def game_private_message(update, context):
     field_index = form["field_index"]
     field_name = GAME_FIELDS[field_index][0]
 
-    if field_name in ("start_at", "finish_at"):
+    if field_name == "start_at":
         try:
-            parsed_dt = parse_game_datetime(value)
+            parsed_start = parse_game_start_date(
+                value
+            )
         except ValueError:
             await message.reply_text(
-                "Не вдалося прочитати дату. Використай формат "
-                "ДД.ММ.РРРР ГГ:ХХ, наприклад 05.11.2026 19:30."
+                "Не вдалося прочитати дату старту. "
+                "Використай формат ДД.ММ.РРРР, "
+                "наприклад 05.11.2026."
             )
             return
 
-        if field_name == "finish_at":
-            start_dt = parse_game_datetime(
-                form["data"]["start_at"]
-            )
-            if parsed_dt <= start_dt:
-                await message.reply_text(
-                    "Фініш має бути пізніше за старт гри. Спробуй ще раз."
-                )
-                return
-            if parsed_dt <= datetime.now(KYIV_TZ):
-                await message.reply_text(
-                    "Фініш гри має бути в майбутньому. Спробуй ще раз."
-                )
-                return
+        value = parsed_start.strftime(
+            "%d.%m.%Y"
+        )
 
-        value = format_game_datetime(parsed_dt)
+    elif field_name == "finish_at":
+        try:
+            finish_date = parse_game_start_date(
+                value
+            )
+        except ValueError:
+            await message.reply_text(
+                "Не вдалося прочитати дату фінішу. "
+                "Використай формат ДД.ММ.РРРР, "
+                "наприклад 05.12.2026."
+            )
+            return
+
+        start_date = parse_game_start_date(
+            form["data"]["start_at"]
+        )
+        if finish_date < start_date:
+            await message.reply_text(
+                "Фініш не може бути раніше за старт гри. "
+                "Спробуй ще раз."
+            )
+            return
+
+        if finish_date < datetime.now(KYIV_TZ).date():
+            await message.reply_text(
+                "Фініш гри не може бути в минулому. "
+                "Спробуй ще раз."
+            )
+            return
+
+        value = finish_date.strftime(
+            "%d.%m.%Y"
+        )
 
     form["data"][field_name] = value
     field_index += 1
@@ -275,25 +295,31 @@ async def game_private_message(update, context):
         return
 
     data = form["data"]
-    start_dt = parse_game_datetime(data["start_at"])
-    finish_dt = parse_game_datetime(data["finish_at"])
-    status = get_initial_game_status(
-        start_dt,
-        finish_dt,
-    )
 
-    game_id = add_game(
-        chat_id=form["chat_id"],
-        name=data["name"],
-        rules=data["rules"],
-        start_at=start_dt.isoformat(),
-        finish_at=finish_dt.isoformat(),
-        author=data["author"],
-        author_user_id=data["author_user_id"],
-        prizes=data["prizes"],
-        hashtag=data["hashtag"],
-        status=status,
-    )
+    try:
+        game_id, status = add_game_with_limit(
+            chat_id=form["chat_id"],
+            name=data["name"],
+            rules=data["rules"],
+            start_at=data["start_at"],
+            finish_at=data["finish_at"],
+            author=data["author"],
+            author_user_id=data["author_user_id"],
+            prizes=data["prizes"],
+            hashtag=data["hashtag"],
+        )
+    except ActiveGameLimitReached as exc:
+        context.user_data.pop("game_form", None)
+
+        await message.reply_text(
+            "🐔 Усі щаблі насісту зайняті :(\n\n"
+            "Поки ти заповнювала форму, активних ігор "
+            f"стало {exc.active_count}/{MAX_ACTIVE_GAMES}. "
+            "Цю гру не активовано й не додано. "
+            "Подивись активні ігри та спробуй ще раз, "
+            "коли звільниться місце."
+        )
+        return
 
     group_announcement = (
         "🎮 В Ціпаріумі нова гра!\n\n"
@@ -335,6 +361,7 @@ async def game_private_message(update, context):
         f"Назва: {data['name']}\n"
         f"Старт: {data['start_at']}\n"
         f"Фініш: {data['finish_at']}\n"
+        f"Статус: {status}\n"
         f"Автор: {data['author']}\n"
         f"Призи: {data['prizes']}\n"
         f"Хештег: {data['hashtag']}\n\n"
@@ -456,8 +483,7 @@ async def cipagamelimit(update, context):
         )
         return
 
-    now_iso = datetime.now(KYIV_TZ).isoformat()
-    activate_pending_games(now_iso)
+    refresh_game_statuses(message.chat_id)
     active_count = get_active_games_count(
         message.chat_id
     )

@@ -270,11 +270,14 @@ def main():
         error_handler
     )
 
-    app.job_queue.run_repeating(
+    app.job_queue.run_daily(
         game_status_refresh_job,
-        interval=60,
-        first=10,
-        name="game_status_refresh_job",
+        time=time(
+            hour=0,
+            minute=5,
+            tzinfo=KYIV_TZ,
+        ),
+        name="daily_game_status_job",
     )
 
     app.job_queue.run_daily(
