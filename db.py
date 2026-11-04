@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -6,6 +7,9 @@ from telegram.ext import ContextTypes
 from config import DB_PATH, MESSAGE_RETENTION_DAYS, KYIV_TZ
 from migrations import run_migrations
 
+
+
+logger = logging.getLogger(__name__)
 
 def human_log_time():
     return datetime.now(KYIV_TZ).strftime("%d.%m.%Y %H:%M:%S")
@@ -122,7 +126,7 @@ def cleanup_old_data():
     deleted_portrait_visuals = portrait_visuals_cursor.rowcount
 
     if deleted_messages or deleted_daily_visuals or deleted_portrait_visuals:
-        print(
+        logger.info(
             f"[{human_log_time()}] Cleanup older than "
             f"{MESSAGE_RETENTION_DAYS} days: "
             f"messages={deleted_messages}, "

@@ -55,6 +55,101 @@ def seed_static_content(db):
     )
 
 
+
+CIPAINFO_WISHLIST = '🎁 Забаганки ціпочок можна знайти тут:\nhttps://docs.google.com/spreadsheets/d/1MYFQi9W-pLmbdOWPqAvuqOn_JLQC6C-PpIVspbNXrKo/edit?gid=0#gid=0\n\nВішліст може редагувати будь-який учасник чату, тож додавайте свої дні народження та забаганки!'
+CIPAINFO_YOUTUBE = 'Ютуб канали учасниць чату\n\nOlga Dmytrenko @Shalkara\nhttps://youtube.com/@crossesandtails\n\nНата Носова @Nata_Nosova\nhttps://youtube.com/@natastichstory\n\nМария @maria_with_embroidery\nhttps://youtube.com/@mariawithembroidery2898\n\nIrina (Kiev) Shtanko\nhttps://youtube.com/@luckystitch4797\n\nМарго Маргарита\nhttps://youtube.com/@MargoStitch\n\nNina Duyunova Nina\nhttps://youtube.com/@NinaDuyunova\n\nLiza Goncharova Liza\nhttps://youtube.com/@LizaHoncharova\n\nСвітлана Петрова @svitpet01\nhttps://youtube.com/@svitlana_petrova?si=nLX5_QBI0dTgApOp\n\nАлёна Гончарь Алёна Гончарь\nhttps://youtube.com/@alena.gonchar\n\nMaria Maria\nhttps://www.youtube.com/@lazy_stitcher/videos\n\nKristinLavransdatter @KristinLavransdatter\nhttps://youtube.com/@slowcrossstitch?si=nXpKqO3GYFE8wb1J\n\nИрина @inarmiel\nhttps://www.youtube.com/@INarmiel/featured\n\n@tetyana_kulik Тетяна Кулик\nhttps://youtube.com/@rainbow_crosses_with_Tatyana?si=Bl50My7tt4blLAH1\n\nВікторія RutaStitch\nhttps://youtube.com/@rutastitch?si=o9IY-PRJEMng4Gop\n\nAlla Алла Бондар\nhttps://youtube.com/@allabondar?si=yuoGRpX99ik1ZsYU\n\n@m_maruse4ka_m Марина\nhttps://youtube.com/@m.mari.no4ka?feature=shared\n\nLiza Liza Auchyieva\nhttps://youtube.com/channel/UC4BsWHk__7DsSXxHdxW5FvQ?si=ukYAt_gBrR0EH_Xy\n\nTetiana Dovhanych @oddigrid\nhttps://youtube.com/@dovganich8840?si=JaUl2eHIy0qmLZlT\n\nТаня (Созвездие крестиков)\nhttps://www.youtube.com/@sozvezdiekrestikov'
+
+CIPAINFO_THREADS = "🧵 Наші додаткові тематичні групи:\n\nВишиті сорочки\nhttps://t.me/+Lc0hwfsJnDI5NDEy\n\nЦіпи і серіали\nhttps://t.me/+k8XyU7v-ej8yMTgy\n\nСпорт і Ціпи\nhttps://t.me/+UlVRjrTKHbMxY2Q6\n\nВ'язальний чат\nhttps://t.me/+tCYzmI6cXhQ0MzVi\n\nКнижковий чат\nhttps://t.me/+-4YdtuE3Cao2OTcy\n\nРозхом'ячка для учасників чату\nhttps://t.me/+VW_T6VYjU1hmYjIy"
+
+
+CIPAINFO_DESIGNERS = '🎨 Наші ціпи-дизайнери:\n\nKerry\nhttps://www.instagram.com/kerry_embroidery/\n\nKomod\nhttps://www.instagram.com/komod.for.you/\n\nМіла та Катя\nhttps://www.instagram.com/mika__mila_katya/'
+
+
+CIPAINFO_THREADS_PLACEHOLDERS = ['🧵 Тематичні гілки чату поки порожні.', '🧵 Тематичні гілки чату поки не заповнені.']
+CIPAINFO_DESIGNERS_PLACEHOLDERS = ["🎨 Список ціп-дизайнерів скоро з'явиться тут."]
+
+
+def seed_cipainfo_content(db):
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [
+        ("cipainfo_wishlist", CIPAINFO_WISHLIST, now),
+        ("cipainfo_youtube", CIPAINFO_YOUTUBE, now),
+        ("cipainfo_threads", CIPAINFO_THREADS, now),
+        ("cipainfo_designers", CIPAINFO_DESIGNERS, now),
+    ]
+    db.executemany(
+        """
+        INSERT OR IGNORE INTO static_content (key, content, updated_at)
+        VALUES (?, ?, ?)
+        """,
+        rows,
+    )
+
+    db.execute(
+        """
+        UPDATE static_content
+        SET content = ?, updated_at = ?
+        WHERE key = ?
+          AND content = ?
+        """,
+        (
+            CIPAINFO_WISHLIST,
+            now,
+            "cipainfo_wishlist",
+            '🎁 Вішліст чату поки порожній.',
+        ),
+    )
+
+    db.execute(
+        """
+        UPDATE static_content
+        SET content = ?, updated_at = ?
+        WHERE key = ?
+          AND content = ?
+        """,
+        (
+            CIPAINFO_THREADS,
+            now,
+            "cipainfo_threads",
+            '🧵 Тематичні гілки чату поки порожні.',
+        ),
+    )
+
+
+    for placeholder in CIPAINFO_THREADS_PLACEHOLDERS:
+        db.execute(
+            """
+            UPDATE static_content
+            SET content = ?, updated_at = ?
+            WHERE key = ?
+              AND content = ?
+            """,
+            (
+                CIPAINFO_THREADS,
+                now,
+                "cipainfo_threads",
+                placeholder,
+            ),
+        )
+
+    for placeholder in CIPAINFO_DESIGNERS_PLACEHOLDERS:
+        db.execute(
+            """
+            UPDATE static_content
+            SET content = ?, updated_at = ?
+            WHERE key = ?
+              AND content = ?
+            """,
+            (
+                CIPAINFO_DESIGNERS,
+                now,
+                "cipainfo_designers",
+                placeholder,
+            ),
+        )
+
+
 def run_migrations(db):
     migrate_games_table(db)
     seed_static_content(db)
+    seed_cipainfo_content(db)

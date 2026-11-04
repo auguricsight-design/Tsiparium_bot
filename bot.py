@@ -1,12 +1,16 @@
+import logging
 from datetime import time
 
 from telegram import Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     filters,
 )
+
+from logging_config import configure_logging
 
 from config import (
     TELEGRAM_BOT_TOKEN,
@@ -17,11 +21,13 @@ from config import (
     KYIV_TZ,
 )
 from commands import (
+    cipainfo_add_message,
     human_log_time,
     cipahow,
     ciparules,
     cipagames,
     cipainfo,
+    cipainfo_callback,
     welcome_new_members,
 )
 from db import (
@@ -50,18 +56,43 @@ from games import (
 )
 
 
+
+logger = logging.getLogger(__name__)
+
 async def error_handler(
     update,
     context,
 ):
-    print(
-        f"[{human_log_time()}] "
-        f"Telegram error: "
-        f"{repr(context.error)}"
+    error = context.error
+    logger.error(
+        "[%s] Telegram error: %r",
+        human_log_time(),
+        error,
+        exc_info=(
+            type(error),
+            error,
+            error.__traceback__,
+        ) if error else None,
+    )
+
+
+async def private_text_router(update, context):
+    if context.user_data.get("cipainfo_add_section"):
+        await cipainfo_add_message(
+            update,
+            context,
+        )
+        return
+
+    await game_private_message(
+        update,
+        context,
     )
 
 
 def main():
+    configure_logging()
+
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError(
             "TELEGRAM_BOT_TOKEN is not set"
@@ -74,15 +105,15 @@ def main():
 
     init_db()
 
-    print(
+    logger.info(
         f"[{human_log_time()}] "
         f"Database path: {DB_PATH}"
     )
-    print(
+    logger.info(
         f"[{human_log_time()}] "
         f"Image model: {OPENAI_IMAGE_MODEL}"
     )
-    print(
+    logger.info(
         f"[{human_log_time()}] "
         f"Image quality: "
         f"{OPENAI_IMAGE_QUALITY}"
@@ -113,6 +144,13 @@ def main():
         CommandHandler(
             "cipainfo",
             cipainfo,
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            cipainfo_callback,
+            pattern=r"^cipainfo:",
         )
     )
 
@@ -194,6 +232,16 @@ def main():
         )
     )
 
+
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.PRIVATE
+            & filters.TEXT
+            & ~filters.COMMAND,
+            private_text_router,
+        )
+    )
+
     app.add_handler(
         MessageHandler(
             filters.StatusUpdate.NEW_CHAT_MEMBERS,
@@ -201,14 +249,6 @@ def main():
         )
     )
 
-    app.add_handler(
-        MessageHandler(
-            filters.ChatType.PRIVATE
-            & filters.TEXT
-            & ~filters.COMMAND,
-            game_private_message,
-        )
-    )
 
     app.add_handler(
         MessageHandler(
@@ -257,7 +297,7 @@ def main():
         name="daily_cleanup_job",
     )
 
-    print(
+    logger.info(
         f"[{human_log_time()}] "
         "Ципаріум запущено 🐔"
     )

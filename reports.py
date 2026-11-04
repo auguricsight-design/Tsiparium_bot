@@ -1,3 +1,4 @@
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -9,6 +10,7 @@ from config import (
     MAX_REPORTS_PER_DAY,
 )
 from commands import (
+    require_group_chat,
     human_log_time,
     send_long_message,
 )
@@ -20,6 +22,9 @@ from reports_db import (
     increment_daily_report_count,
 )
 
+
+
+logger = logging.getLogger(__name__)
 
 def format_messages_for_ai(messages):
     result = []
@@ -157,27 +162,27 @@ async def create_ai_summary(
     )
 
     if response.usage:
-        print("")
-        print(
+        logger.info("")
+        logger.info(
             f"===== OPENAI TOKEN USAGE | "
             f"{human_log_time()} ====="
         )
-        print(
+        logger.info(
             f"Input tokens:  "
             f"{response.usage.input_tokens}"
         )
-        print(
+        logger.info(
             f"Output tokens: "
             f"{response.usage.output_tokens}"
         )
-        print(
+        logger.info(
             f"Total tokens:  "
             f"{response.usage.total_tokens}"
         )
-        print(
+        logger.info(
             "=========================================="
         )
-        print("")
+        logger.info("")
 
     return response.output_text.strip()
 
@@ -370,9 +375,9 @@ async def zvit(
         )
 
     except Exception as e:
-        print(
-            f"[{human_log_time()}] "
-            f"OpenAI error: {repr(e)}"
+        logger.exception(
+            "[%s] OpenAI report error",
+            human_log_time(),
         )
 
         await message.reply_text(

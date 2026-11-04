@@ -1,3 +1,4 @@
+import logging
 import base64
 import json
 import re
@@ -17,6 +18,7 @@ from config import (
     KYIV_TZ,
 )
 from commands import (
+    require_group_chat,
     human_log_time,
     send_long_message,
 )
@@ -32,6 +34,9 @@ from visuals_db import (
 from reports import format_messages_for_ai
 
 
+
+
+logger = logging.getLogger(__name__)
 
 def format_portrait_cooldown_time(generated_at):
     dt = datetime.fromisoformat(
@@ -180,23 +185,23 @@ async def build_cipa_portrait_prompt(
                     }
                 )
 
-    print("")
-    print(
+    logger.info("")
+    logger.info(
         f"===== CIPA PORTRAIT VISUAL ELEMENTS | "
         f"{human_log_time()} | "
         f"{requested_username} ====="
     )
 
     for item in clean_elements:
-        print(
+        logger.info(
             f"• {item['element']} — "
             f"{item['reason']}"
         )
 
-    print(
+    logger.info(
         "===================================================="
     )
-    print("")
+    logger.info("")
 
     return (
         visual_prompt,
@@ -353,7 +358,7 @@ async def portrait(
             elements=elements,
         )
 
-        print(
+        logger.info(
             f"[{human_log_time()}] "
             f"Cipa portrait sent for "
             f"{requested_username} "
@@ -361,12 +366,11 @@ async def portrait(
         )
 
     except Exception as e:
-        print(
-            f"[{human_log_time()}] "
-            f"Cipa portrait error for "
-            f"{requested_username} "
-            f"in chat {message.chat_id}: "
-            f"{repr(e)}"
+        logger.exception(
+            "[%s] Cipa portrait error for %s in chat %s",
+            human_log_time(),
+            requested_username,
+            message.chat_id,
         )
 
         await message.reply_text(

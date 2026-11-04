@@ -1,3 +1,4 @@
+import logging
 import base64
 import json
 import random
@@ -17,6 +18,7 @@ from config import (
     MAX_MESSAGES,
 )
 from commands import (
+    require_group_chat,
     human_log_time,
     is_chat_admin,
     send_long_message,
@@ -32,6 +34,9 @@ from visuals_db import (
 )
 from reports import format_messages_for_ai
 
+
+
+logger = logging.getLogger(__name__)
 
 def format_chicken_name(chicken):
     if chicken["username"]:
@@ -130,27 +135,27 @@ Telegram-чату за останні 24 години.
     )
 
     if response.usage:
-        print("")
-        print(
+        logger.info("")
+        logger.info(
             f"===== DAILY IMAGE PROMPT TOKEN USAGE | "
             f"{human_log_time()} ====="
         )
-        print(
+        logger.info(
             f"Input tokens:  "
             f"{response.usage.input_tokens}"
         )
-        print(
+        logger.info(
             f"Output tokens: "
             f"{response.usage.output_tokens}"
         )
-        print(
+        logger.info(
             f"Total tokens:  "
             f"{response.usage.total_tokens}"
         )
-        print(
+        logger.info(
             "======================================================"
         )
-        print("")
+        logger.info("")
 
     raw = response.output_text.strip()
 
@@ -220,22 +225,22 @@ Telegram-чату за останні 24 години.
                     }
                 )
 
-    print("")
-    print(
+    logger.info("")
+    logger.info(
         f"===== DAILY CIPA VISUAL ELEMENTS | "
         f"{human_log_time()} ====="
     )
 
     for item in clean_elements:
-        print(
+        logger.info(
             f"• {item['element']} — "
             f"{item['reason']}"
         )
 
-    print(
+    logger.info(
         "=============================================="
     )
-    print("")
+    logger.info("")
 
     return (
         visual_prompt,
@@ -316,8 +321,8 @@ async def send_daily_cipa(
     if not top_chickens:
         return False
 
-    print("")
-    print(
+    logger.info("")
+    logger.info(
         f"===== DAILY TOP CHICKENS | "
         f"{human_log_time()} | "
         f"CHAT {chat_id} ====="
@@ -330,16 +335,16 @@ async def send_daily_cipa(
         top_chickens,
         start=1,
     ):
-        print(
+        logger.info(
             f"{index}. "
             f"{format_chicken_name(chicken)} — "
             f"{chicken['message_count']} повідомлень"
         )
 
-    print(
+    logger.info(
         "============================================================"
     )
-    print("")
+    logger.info("")
 
     shuffled_chickens = (
         top_chickens.copy()
@@ -381,7 +386,7 @@ async def send_daily_cipa(
         elements=elements,
     )
 
-    print(
+    logger.info(
         f"[{human_log_time()}] "
         f"Daily Ciparium post sent "
         f"to chat {chat_id}"
@@ -401,11 +406,10 @@ async def daily_chicken_image_job(
             )
 
         except Exception as e:
-            print(
-                f"[{human_log_time()}] "
-                f"Daily Ciparium error "
-                f"for chat {chat_id}: "
-                f"{repr(e)}"
+            logger.exception(
+                "[%s] Daily Ciparium error for chat %s",
+                human_log_time(),
+                chat_id,
             )
 
 
@@ -427,11 +431,10 @@ async def dailycipa(
         )
 
     except Exception as e:
-        print(
-            f"[{human_log_time()}] "
-            f"Admin check error "
-            f"for chat {message.chat_id}: "
-            f"{repr(e)}"
+        logger.exception(
+            "[%s] Admin check error for chat %s",
+            human_log_time(),
+            message.chat_id,
         )
 
         await message.reply_text(
@@ -461,11 +464,10 @@ async def dailycipa(
             )
 
     except Exception as e:
-        print(
-            f"[{human_log_time()}] "
-            f"/dailycipa error "
-            f"for chat {message.chat_id}: "
-            f"{repr(e)}"
+        logger.exception(
+            "[%s] /dailycipa error for chat %s",
+            human_log_time(),
+            message.chat_id,
         )
 
         await message.reply_text(
@@ -492,11 +494,10 @@ async def dailycipawhy(
         )
 
     except Exception as e:
-        print(
-            f"[{human_log_time()}] "
-            f"Admin check error "
-            f"for chat {message.chat_id}: "
-            f"{repr(e)}"
+        logger.exception(
+            "[%s] Admin check error for chat %s",
+            human_log_time(),
+            message.chat_id,
         )
 
         await message.reply_text(
@@ -552,3 +553,5 @@ async def dailycipawhy(
         message,
         "\n".join(lines),
     )
+
+# - IMPORTANT terminology rule: if the chat mentions the word "мопед" (or forms of it) in Ukrainian/Russian context, interpret it as a Shahed attack drone, NOT as a moped, scooter, motorcycle, bicycle, or any other two-wheeled vehicle.

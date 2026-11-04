@@ -1,11 +1,12 @@
-import traceback
+import logging
 from datetime import datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType
 
 from config import MAX_ACTIVE_GAMES, KYIV_TZ
-from commands import is_chat_admin
+from content_db import get_static_content
+from commands import is_chat_admin, send_cipainfo_menu, send_long_message
 from game_db import (
     add_game,
     mark_game_completed,
@@ -24,6 +25,9 @@ GAME_FIELDS = [
     ("hashtag", "#️⃣ Вкажи хештег гри, наприклад #моягра."),
 ]
 
+
+
+logger = logging.getLogger(__name__)
 
 def parse_game_datetime(value):
     return datetime.strptime(
@@ -104,6 +108,28 @@ async def game_private_start(update, context):
     user = update.effective_user
 
     if not message or not user or message.chat.type != ChatType.PRIVATE:
+        return
+
+    if context.args and context.args[0] == "cipainfo":
+        await send_cipainfo_menu(
+            context.bot,
+            message.chat_id,
+        )
+        return
+
+    if context.args and context.args[0] == "ciparules":
+        rules_text = get_static_content(
+            "ciparules"
+        )
+        if not rules_text:
+            await message.reply_text(
+                "🐔 Правила Ціпаріума поки недоступні."
+            )
+            return
+        await send_long_message(
+            message,
+            rules_text,
+        )
         return
 
     if not context.args:
@@ -288,19 +314,17 @@ async def game_private_message(update, context):
         )
     except Exception as e:
         announcement_sent = False
-        print(
-            "===== GAME ANNOUNCEMENT ERROR =====\n"
-            f"chat_id: {form['chat_id']}\n"
-            f"game_id: {game_id}\n"
-            f"game_name: {data['name']}\n"
-            f"author: {data['author']}\n"
-            f"start_at: {data['start_at']}\n"
-            f"finish_at: {data['finish_at']}\n"
-            f"hashtag: {data['hashtag']}\n"
-            f"exception_type: {type(e).__name__}\n"
-            f"exception: {e}\n"
-            f"traceback:\n{traceback.format_exc()}"
-            "==================================="
+        logger.exception(
+            "GAME ANNOUNCEMENT ERROR | chat_id=%s | game_id=%s | "
+            "game_name=%r | author=%r | start_at=%r | finish_at=%r | "
+            "hashtag=%r",
+            form["chat_id"],
+            game_id,
+            data["name"],
+            data["author"],
+            data["start_at"],
+            data["finish_at"],
+            data["hashtag"],
         )
 
     context.user_data.pop("game_form", None)
