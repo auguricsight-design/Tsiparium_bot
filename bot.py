@@ -47,7 +47,6 @@ from portraits import (
 from games import (
     cipagames,
     cipagames_callback,
-    gameadd,
     game_private_start,
     game_private_message,
     game_form_callback,

@@ -215,54 +215,6 @@ def add_game_with_limit(
     return cursor.lastrowid, status
 
 
-def add_game(
-    chat_id,
-    name,
-    rules,
-    start_at,
-    finish_at,
-    author,
-    author_user_id,
-    prizes,
-    hashtag,
-    status,
-):
-    created_at = datetime.now(timezone.utc).isoformat()
-    with get_db() as db:
-        cursor = db.execute(
-            """
-            INSERT INTO games (
-                chat_id,
-                name,
-                rules,
-                start_at,
-                finish_at,
-                author,
-                author_user_id,
-                prizes,
-                hashtag,
-                status,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                chat_id,
-                name,
-                rules,
-                start_at,
-                finish_at,
-                author,
-                author_user_id,
-                prizes,
-                hashtag,
-                status,
-                created_at,
-            ),
-        )
-        return cursor.lastrowid
-
-
 
 def get_active_games_count(chat_id):
     refresh_game_statuses(chat_id)

@@ -38,19 +38,6 @@ def parse_game_start_date(value):
     ).date()
 
 
-def parse_game_datetime(value):
-    return datetime.strptime(
-        value,
-        "%d.%m.%Y %H:%M",
-    ).replace(tzinfo=KYIV_TZ)
-
-
-def format_game_datetime(dt):
-    return dt.astimezone(KYIV_TZ).strftime(
-        "%d.%m.%Y %H:%M"
-    )
-
-
 async def game_status_refresh_job(context):
     refresh_game_statuses()
 
@@ -59,6 +46,8 @@ CIPAGAMES_MENU_PREFIX = "cipagames:menu:"
 CIPAGAMES_GAME_PREFIX = "cipagames:game:"
 CIPAGAMES_LIMIT_PREFIX = "cipagames:limit:"
 CIPAGAMES_FINISH_PREFIX = "cipagames:finish:"
+CIPAGAMES_ADMIN_LIST_PREFIX = "cipagames:admin_list:"
+CIPAGAMES_ADMIN_MENU_PREFIX = "cipagames:admin_menu:"
 GAME_FORM_CONFIRM_CALLBACK = "gameform:confirm"
 GAME_FORM_CANCEL_CALLBACK = "gameform:cancel"
 
@@ -241,15 +230,28 @@ async def cipagames(update, context):
         user.id,
         context,
     ):
-        refresh_game_statuses(chat.id)
-        games_list = get_active_games(
-            chat.id
-        )
-
         await message.reply_text(
-            _format_admin_cipagames_text(
-                games_list
-            )
+            "🎮 Що показати?",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "📋 Список активних ігор",
+                        callback_data=(
+                            f"{CIPAGAMES_ADMIN_LIST_PREFIX}"
+                            f"{chat.id}"
+                        ),
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🎮 В меню",
+                        callback_data=(
+                            f"{CIPAGAMES_ADMIN_MENU_PREFIX}"
+                            f"{chat.id}"
+                        ),
+                    )
+                ],
+            ]),
         )
         return
 
@@ -295,6 +297,81 @@ async def cipagames_callback(update, context):
 
     await query.answer()
     data = query.data or ""
+
+    if data.startswith(CIPAGAMES_ADMIN_LIST_PREFIX):
+        try:
+            source_chat_id = int(
+                data.removeprefix(
+                    CIPAGAMES_ADMIN_LIST_PREFIX
+                )
+            )
+        except ValueError:
+            return
+
+        if not await is_chat_admin(
+            source_chat_id,
+            update.effective_user.id,
+            context,
+        ):
+            await query.answer(
+                "Ця опція доступна лише адмінам.",
+                show_alert=True,
+            )
+            return
+
+        games_list = get_active_games(
+            source_chat_id
+        )
+
+        await query.edit_message_text(
+            _format_admin_cipagames_text(
+                games_list
+            )
+        )
+        return
+
+    if data.startswith(CIPAGAMES_ADMIN_MENU_PREFIX):
+        try:
+            source_chat_id = int(
+                data.removeprefix(
+                    CIPAGAMES_ADMIN_MENU_PREFIX
+                )
+            )
+        except ValueError:
+            return
+
+        if not await is_chat_admin(
+            source_chat_id,
+            update.effective_user.id,
+            context,
+        ):
+            await query.answer(
+                "Ця опція доступна лише адмінам.",
+                show_alert=True,
+            )
+            return
+
+        context.user_data[
+            "cipagames_source_chat_id"
+        ] = source_chat_id
+
+        bot_info = await context.bot.get_me()
+
+        await query.edit_message_text(
+            text=_cipagames_menu_text(
+                get_active_games(
+                    source_chat_id
+                )
+            ),
+            reply_markup=_cipagames_markup(
+                get_active_games(
+                    source_chat_id
+                ),
+                source_chat_id,
+                bot_info.username,
+            ),
+        )
+        return
 
     if data.startswith(CIPAGAMES_MENU_PREFIX):
         try:
@@ -504,52 +581,6 @@ async def cipagames_callback(update, context):
                 buttons
             ),
         )
-
-
-async def gameadd(update, context):
-    message = update.effective_message
-    user = update.effective_user
-
-    if not message or not user:
-        return
-
-    if message.chat.type == ChatType.PRIVATE:
-        await message.reply_text(
-            "Щоб додати гру, виклич /gameadd у групі Ціпаріума."
-        )
-        return
-
-    refresh_game_statuses(message.chat_id)
-    active_count = get_active_games_count(
-        message.chat_id
-    )
-
-    if active_count >= MAX_ACTIVE_GAMES:
-        await message.reply_text(
-            "🎮 У Ціпаріумі вже максимальна кількість "
-            f"активних ігор: {active_count}/{MAX_ACTIVE_GAMES}.\n\n"
-            "Спочатку завершіть одну з активних ігор через /gamestop."
-        )
-        return
-
-    bot_info = await context.bot.get_me()
-    payload = f"gameadd_{message.chat_id}_{user.id}"
-    url = f"https://t.me/{bot_info.username}?start={payload}"
-
-    keyboard = InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton(
-                "🎮 Додати гру в приваті",
-                url=url,
-            )
-        ]]
-    )
-
-    mention = f"@{user.username}" if user.username else user.full_name
-    await message.reply_text(
-        f"{mention}, натисни кнопку нижче, щоб додати гру в приватному діалозі з ботом.",
-        reply_markup=keyboard,
-    )
 
 
 async def game_private_start(update, context):
@@ -953,85 +984,6 @@ async def game_form_callback(update, context):
         await query.edit_message_text(
             "🐔 Ой-ой, щось пішло не так!\n\n"
             "Напиши @shalkara — нехай-но загляне в курятник 🛠️"
-        )
-
-
-async def gamestop(update, context):
-    message = update.effective_message
-    if not message:
-        return
-
-    if message.chat.type == ChatType.PRIVATE:
-        await message.reply_text(
-            "Команду /gamestop потрібно викликати в чаті Ціпаріума."
-        )
-        return
-
-    if not context.args:
-        await message.reply_text(
-            "🛑 Щоб завершити гру, вкажи її ID: /gamestop 123"
-        )
-        return
-
-    try:
-        game_id = int(context.args[0])
-    except ValueError:
-        await message.reply_text(
-            "ID гри має бути числом. Наприклад: /gamestop 123"
-        )
-        return
-
-    game = get_game_by_id(
-        message.chat_id,
-        game_id,
-    )
-    if not game:
-        await message.reply_text(
-            "Не знайшла гру з таким ID у цьому чаті."
-        )
-        return
-
-    if game["status"] == "completed":
-        await message.reply_text(
-            "✅ Ця гра вже завершена."
-        )
-        return
-
-    user = update.effective_user
-    if not user:
-        return
-
-    is_admin = await is_chat_admin(
-        message.chat_id,
-        user.id,
-        context,
-    )
-
-    is_author = False
-    if game["author_user_id"]:
-        is_author = (
-            int(game["author_user_id"])
-            == user.id
-        )
-    elif user.username and game["author"]:
-        is_author = (
-            game["author"].strip().lower()
-            == f"@{user.username}".lower()
-        )
-
-    if not (is_admin or is_author):
-        await message.reply_text(
-            "🐔 Цю гру може завершити лише її автор або адмін чату."
-        )
-        return
-
-    if mark_game_completed(
-        message.chat_id,
-        game_id,
-    ):
-        await message.reply_text(
-            "🏁 Ну все, курочки — час розслабити хвостики! 🐔✨\n\n"
-            f"Гру «{game['name']}» завершено. Дякую всім за кіпіш 💛"
         )
 
 
