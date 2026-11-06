@@ -25,7 +25,6 @@ from commands import (
     human_log_time,
     cipahow,
     ciparules,
-    cipagames,
     cipainfo,
     cipainfo_callback,
     welcome_new_members,
@@ -46,11 +45,12 @@ from portraits import (
     lastcipawhy,
 )
 from games import (
+    cipagames,
+    cipagames_callback,
     gameadd,
     game_private_start,
     game_private_message,
-    game_cancel,
-    gamestop,
+    game_form_callback,
     cipagamelimit,
     game_status_refresh_job,
 )
@@ -168,6 +168,20 @@ def main():
         )
     )
 
+    app.add_handler(
+        CallbackQueryHandler(
+            cipagames_callback,
+            pattern=r"^cipagames:",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            game_form_callback,
+            pattern=r"^gameform:",
+        )
+    )
+
 
     app.add_handler(
         CommandHandler(
@@ -176,26 +190,8 @@ def main():
         )
     )
 
-    app.add_handler(
-        CommandHandler(
-            "cancel",
-            game_cancel,
-        )
-    )
 
-    app.add_handler(
-        CommandHandler(
-            "gameadd",
-            gameadd,
-        )
-    )
 
-    app.add_handler(
-        CommandHandler(
-            "gamestop",
-            gamestop,
-        )
-    )
 
     app.add_handler(
         CommandHandler(

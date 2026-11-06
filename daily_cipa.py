@@ -135,27 +135,15 @@ Telegram-чату за останні 24 години.
     )
 
     if response.usage:
-        logger.info("")
-        logger.info(
-            f"===== DAILY IMAGE PROMPT TOKEN USAGE | "
-            f"{human_log_time()} ====="
-        )
-        logger.info(
-            f"Input tokens:  "
-            f"{response.usage.input_tokens}"
-        )
-        logger.info(
-            f"Output tokens: "
-            f"{response.usage.output_tokens}"
-        )
-        logger.info(
-            f"Total tokens:  "
-            f"{response.usage.total_tokens}"
-        )
-        logger.info(
+        usage_block = (
+            f"\n===== DAILY IMAGE PROMPT TOKEN USAGE | "
+            f"{human_log_time()} =====\n"
+            f"Input tokens:  {response.usage.input_tokens}\n"
+            f"Output tokens: {response.usage.output_tokens}\n"
+            f"Total tokens:  {response.usage.total_tokens}\n"
             "======================================================"
         )
-        logger.info("")
+        logger.info(usage_block)
 
     raw = response.output_text.strip()
 
@@ -225,22 +213,20 @@ Telegram-чату за останні 24 години.
                     }
                 )
 
-    logger.info("")
-    logger.info(
+    element_lines = [
         f"===== DAILY CIPA VISUAL ELEMENTS | "
         f"{human_log_time()} ====="
+    ]
+    element_lines.extend(
+        f"• {item['element']} — {item['reason']}"
+        for item in clean_elements
     )
-
-    for item in clean_elements:
-        logger.info(
-            f"• {item['element']} — "
-            f"{item['reason']}"
-        )
-
-    logger.info(
+    element_lines.append(
         "=============================================="
     )
-    logger.info("")
+    logger.info(
+        "\n" + "\n".join(element_lines)
+    )
 
     return (
         visual_prompt,
@@ -321,30 +307,28 @@ async def send_daily_cipa(
     if not top_chickens:
         return False
 
-    logger.info("")
-    logger.info(
+    top_lines = [
         f"===== DAILY TOP CHICKENS | "
         f"{human_log_time()} | "
         f"CHAT {chat_id} ====="
-    )
-
-    for (
-        index,
-        chicken,
-    ) in enumerate(
-        top_chickens,
-        start=1,
-    ):
-        logger.info(
+    ]
+    top_lines.extend(
+        (
             f"{index}. "
             f"{format_chicken_name(chicken)} — "
             f"{chicken['message_count']} повідомлень"
         )
-
-    logger.info(
+        for index, chicken in enumerate(
+            top_chickens,
+            start=1,
+        )
+    )
+    top_lines.append(
         "============================================================"
     )
-    logger.info("")
+    logger.info(
+        "\n" + "\n".join(top_lines)
+    )
 
     shuffled_chickens = (
         top_chickens.copy()

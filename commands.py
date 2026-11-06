@@ -126,8 +126,8 @@ async def cipahow(
         "персонального портрета.\n"
         "• /cipahow — показує цей список команд.\n"
         "• /cipainfo — корисна інформація Ціпаріуму.\n"
-        "• /gameadd — запускає додавання нової гри через приватний діалог із ботом.\n"
-        "• /gamestop ID — завершити гру; доступно автору гри або адміну.\n"
+        "• /cipagames — активні ігри, їхні правила та додавання нової гри.\n"
+        ""
         "• /cipagamelimit — показує кількість активних ігор і ліміт у чаті.\n\n"
         "Тільки для адмінів чату:\n"
         "• /dailycipa — вручну запускає Daily Cipa: картинка за темами "
@@ -265,20 +265,6 @@ async def ciparules(
             "Відкрий приватний чат із ботом — там покажу правила.",
             reply_markup=keyboard,
         )
-
-
-async def cipagames(
-    update,
-    context,
-):
-    message = update.effective_message
-
-    if not message:
-        return
-
-    await message.reply_text(
-        "🎮 Список актуальних ігор скоро з'явиться тут."
-    )
 
 
 

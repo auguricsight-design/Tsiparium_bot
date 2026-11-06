@@ -279,6 +279,21 @@ def get_active_games_count(chat_id):
     return int(row["count"] if row else 0)
 
 
+def get_active_games(chat_id):
+    refresh_game_statuses(chat_id)
+    with get_db() as db:
+        return db.execute(
+            """
+            SELECT *
+            FROM games
+            WHERE chat_id = ?
+              AND status = 'active'
+            ORDER BY start_at ASC, id ASC
+            """,
+            (chat_id,),
+        ).fetchall()
+
+
 def mark_game_completed(chat_id, game_id):
     with get_db() as db:
         cursor = db.execute(
