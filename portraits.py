@@ -373,9 +373,12 @@ async def portrait(
             message.chat_id,
         )
 
-        await message.reply_text(
-            "🐔 Не вдалося згенерувати "
-            "Cipa Portrait."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "🐔 Не вдалося згенерувати "
+                "Cipa Portrait."
+            ),
         )
 
 

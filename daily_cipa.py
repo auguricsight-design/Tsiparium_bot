@@ -441,10 +441,13 @@ async def dailycipa(
         )
 
         if not sent:
-            await message.reply_text(
-                "🐔 За останні 24 години "
-                "недостатньо повідомлень "
-                "для Daily Cipa."
+            await context.bot.send_message(
+                chat_id=message.chat_id,
+                text=(
+                    "🐔 За останні 24 години "
+                    "недостатньо повідомлень "
+                    "для Daily Cipa."
+                ),
             )
 
     except Exception as e:
@@ -454,9 +457,12 @@ async def dailycipa(
             message.chat_id,
         )
 
-        await message.reply_text(
-            "🐔 Не вдалося згенерувати "
-            "Daily Cipa."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "🐔 Не вдалося згенерувати "
+                "Daily Cipa."
+            ),
         )
 
 

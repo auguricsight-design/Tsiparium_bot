@@ -1,4 +1,5 @@
 import logging
+from telegram.error import BadRequest, Forbidden, TelegramError
 import re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
@@ -96,6 +97,55 @@ async def send_long_message(
     for chunk in chunks:
         await telegram_message.reply_text(
             chunk
+        )
+
+
+async def send_long_message_to_chat(
+    bot,
+    chat_id,
+    text,
+    max_length=3900,
+):
+    if len(text) <= max_length:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+        )
+        return
+
+    chunks = []
+    current = ""
+
+    for paragraph in text.split("\n\n"):
+        candidate = (
+            current
+            + ("\n\n" if current else "")
+            + paragraph
+        )
+
+        if len(candidate) <= max_length:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+
+            while len(paragraph) > max_length:
+                chunks.append(
+                    paragraph[:max_length]
+                )
+                paragraph = paragraph[
+                    max_length:
+                ]
+
+            current = paragraph
+
+    if current:
+        chunks.append(current)
+
+    for chunk in chunks:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=chunk,
         )
 
 
@@ -249,7 +299,7 @@ async def ciparules(
         await message.reply_text(
             "🐔 Правила вже полетіли тобі в особисті."
         )
-    except Exception:
+    except (Forbidden, BadRequest, TelegramError):
         bot_info = await context.bot.get_me()
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton(
@@ -618,7 +668,7 @@ async def cipainfo_add_message(update, context):
             reply_markup=cipainfo_menu_markup(),
         )
 
-    except Exception:
+    except (BadRequest, Forbidden, TelegramError, ValueError):
         await handle_cipainfo_add_error(
             update,
             section=pending_section,

@@ -1,4 +1,5 @@
 import logging
+from telegram.error import BadRequest, Forbidden, TelegramError
 from datetime import datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -184,7 +185,6 @@ async def send_cipagames_menu(
     target_chat_id,
     source_chat_id,
 ):
-    refresh_game_statuses(source_chat_id)
     games_list = get_active_games(source_chat_id)
     bot_info = await bot.get_me()
 
@@ -269,7 +269,7 @@ async def cipagames(update, context):
         await message.reply_text(
             "🐔 Активні ігри вже полетіли тобі в особисті."
         )
-    except Exception:
+    except (Forbidden, BadRequest, TelegramError):
         bot_info = await context.bot.get_me()
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton(
@@ -383,7 +383,6 @@ async def cipagames_callback(update, context):
         except ValueError:
             return
 
-        refresh_game_statuses(source_chat_id)
         games_list = get_active_games(source_chat_id)
         bot_info = await context.bot.get_me()
 
@@ -622,7 +621,7 @@ async def game_private_start(update, context):
             )
             if member.status in ("left", "kicked"):
                 raise ValueError("not a member")
-        except Exception:
+        except (Forbidden, BadRequest, TelegramError, ValueError):
             await message.reply_text(
                 "Не вдалося підтвердити, що ти є в цьому чаті."
             )
@@ -698,7 +697,7 @@ async def game_private_start(update, context):
         )
         if member.status in ("left", "kicked"):
             raise ValueError("not a member")
-    except Exception:
+    except (Forbidden, BadRequest, TelegramError, ValueError):
         await message.reply_text(
             "Не вдалося підтвердити, що ти є в цьому чаті. "
             "Спробуй ще раз через /cipagames у групі."
@@ -956,7 +955,7 @@ async def game_form_callback(update, context):
             chat_id=chat_id,
             text=group_announcement,
         )
-    except Exception:
+    except TelegramError:
         announcement_sent = False
         logger.exception(
             "GAME ANNOUNCEMENT ERROR | "

@@ -13,6 +13,7 @@ from commands import (
     require_group_chat,
     human_log_time,
     send_long_message,
+    send_long_message_to_chat,
 )
 from messages_db import (
     get_messages_for_period,
@@ -380,11 +381,14 @@ async def zvit(
             human_log_time(),
         )
 
-        await message.reply_text(
-            "Не вдалося створити "
-            "Сводки Ципаріума.\n\n"
-            "Подивись Railway Logs — "
-            "там буде текст помилки OpenAI."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "Не вдалося створити "
+                "Сводки Ципаріума.\n\n"
+                "Подивись Railway Logs — "
+                "там буде текст помилки OpenAI."
+            ),
         )
         return
 
@@ -394,7 +398,8 @@ async def zvit(
         requested_message_limit=message_limit,
     )
 
-    await send_long_message(
-        message,
+    await send_long_message_to_chat(
+        context.bot,
+        message.chat_id,
         header + summary,
     )
