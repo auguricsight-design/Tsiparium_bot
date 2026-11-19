@@ -16,7 +16,7 @@ from game_db import (
     get_game_by_id,
     get_active_games_count,
     get_active_games,
-    get_game_chat_ids,
+    get_known_chat_ids,
 )
 
 
@@ -232,7 +232,7 @@ async def cipagames(update, context):
         if not source_chat_id:
             accessible_chats = []
 
-            for candidate_chat_id in get_game_chat_ids():
+            for candidate_chat_id in get_known_chat_ids():
                 try:
                     member = await context.bot.get_chat_member(
                         chat_id=candidate_chat_id,
@@ -779,7 +779,6 @@ async def game_private_start(update, context):
         )
         return
 
-    refresh_game_statuses(chat_id)
     active_count = get_active_games_count(
         chat_id
     )
@@ -788,7 +787,7 @@ async def game_private_start(update, context):
         await message.reply_text(
             "🎮 Поки ти йшла до курятника, місця закінчилися 😅\n\n"
             f"Зараз активних ігор: {active_count}/{MAX_ACTIVE_GAMES}. "
-            "Спочатку потрібно завершити одну з них через /gamestop."
+            "Спочатку потрібно завершити одну з активних ігор через /cipagames."
         )
         return
 
