@@ -16,6 +16,7 @@ from game_db import (
     get_game_by_id,
     get_active_games_count,
     get_active_games,
+    get_known_chat_ids,
 )
 
 
@@ -51,6 +52,22 @@ CIPAGAMES_ADMIN_LIST_PREFIX = "cipagames:admin_list:"
 CIPAGAMES_ADMIN_MENU_PREFIX = "cipagames:admin_menu:"
 GAME_FORM_CONFIRM_CALLBACK = "gameform:confirm"
 GAME_FORM_CANCEL_CALLBACK = "gameform:cancel"
+GAME_FORM_BACK_PREFIX = "gameform:back:"
+
+
+def _game_form_back_markup(field_index):
+    if field_index <= 0:
+        return None
+
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "⬅️ Назад",
+            callback_data=(
+                f"{GAME_FORM_BACK_PREFIX}"
+                f"{field_index}"
+            ),
+        )
+    ]])
 
 
 def _cipagames_markup(
@@ -211,12 +228,66 @@ async def cipagames(update, context):
         source_chat_id = context.user_data.get(
             "cipagames_source_chat_id"
         )
+
         if not source_chat_id:
-            await message.reply_text(
-                "🐔 Відкрий /cipagames у групі Ціпаріума, "
-                "щоб я знала, для якого чату показати ігри."
-            )
-            return
+            accessible_chats = []
+
+            for candidate_chat_id in get_known_chat_ids():
+                try:
+                    member = await context.bot.get_chat_member(
+                        chat_id=candidate_chat_id,
+                        user_id=user.id,
+                    )
+                    if member.status not in ("left", "kicked"):
+                        accessible_chats.append(
+                            candidate_chat_id
+                        )
+                except TelegramError:
+                    continue
+
+            if len(accessible_chats) == 1:
+                source_chat_id = accessible_chats[0]
+                context.user_data[
+                    "cipagames_source_chat_id"
+                ] = source_chat_id
+            elif len(accessible_chats) > 1:
+                rows = []
+
+                for candidate_chat_id in accessible_chats:
+                    try:
+                        source_chat = await context.bot.get_chat(
+                            candidate_chat_id
+                        )
+                        label = (
+                            source_chat.title
+                            or str(candidate_chat_id)
+                        )
+                    except TelegramError:
+                        label = str(candidate_chat_id)
+
+                    rows.append([
+                        InlineKeyboardButton(
+                            f"🎮 {label}",
+                            callback_data=(
+                                f"{CIPAGAMES_MENU_PREFIX}"
+                                f"{candidate_chat_id}"
+                            ),
+                        )
+                    ])
+
+                await message.reply_text(
+                    "🎮 Обери чат, для якого показати ігри:",
+                    reply_markup=InlineKeyboardMarkup(rows),
+                )
+                return
+            else:
+                await message.reply_text(
+                    "🐔 Я ще не знаю, до якого чату прив'язати "
+                    "меню ігор. Відкрий /cipagames у групі "
+                    "Ціпаріума один раз — після цього команда "
+                    "працюватиме і тут."
+                )
+                return
 
         await send_cipagames_menu(
             context.bot,
@@ -382,6 +453,10 @@ async def cipagames_callback(update, context):
             )
         except ValueError:
             return
+
+        context.user_data[
+            "cipagames_source_chat_id"
+        ] = source_chat_id
 
         games_list = get_active_games(source_chat_id)
         bot_info = await context.bot.get_me()
@@ -704,7 +779,6 @@ async def game_private_start(update, context):
         )
         return
 
-    refresh_game_statuses(chat_id)
     active_count = get_active_games_count(
         chat_id
     )
@@ -713,7 +787,7 @@ async def game_private_start(update, context):
         await message.reply_text(
             "🎮 Поки ти йшла до курятника, місця закінчилися 😅\n\n"
             f"Зараз активних ігор: {active_count}/{MAX_ACTIVE_GAMES}. "
-            "Спочатку потрібно завершити одну з них через /gamestop."
+            "Спочатку потрібно завершити одну з активних ігор через /cipagames."
         )
         return
 
@@ -820,7 +894,12 @@ async def game_private_message(update, context):
 
     if field_index < len(GAME_FIELDS):
         form["field_index"] = field_index
-        await message.reply_text(GAME_FIELDS[field_index][1])
+        await message.reply_text(
+            GAME_FIELDS[field_index][1],
+            reply_markup=_game_form_back_markup(
+                field_index
+            ),
+        )
         return
 
     data = form["data"]
@@ -857,7 +936,15 @@ async def game_private_message(update, context):
                     "❌ Відмінити",
                     callback_data=GAME_FORM_CANCEL_CALLBACK,
                 ),
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬅️ Назад",
+                    callback_data=(
+                        f"{GAME_FORM_BACK_PREFIX}preview"
+                    ),
+                ),
+            ],
         ]),
     )
 
@@ -869,6 +956,63 @@ async def game_form_callback(update, context):
         return
 
     await query.answer()
+
+    data = query.data or ""
+
+    if data.startswith(GAME_FORM_BACK_PREFIX):
+        back_target = data.removeprefix(
+            GAME_FORM_BACK_PREFIX
+        )
+
+        if back_target == "preview":
+            pending = context.user_data.pop(
+                "game_form_pending",
+                None,
+            )
+            if not pending:
+                await query.edit_message_text(
+                    "🐔 Ця форма вже неактивна."
+                )
+                return
+
+            field_index = len(GAME_FIELDS) - 1
+            context.user_data["game_form"] = {
+                "chat_id": pending["chat_id"],
+                "field_index": field_index,
+                "data": dict(pending["data"]),
+            }
+
+            await query.edit_message_text(
+                GAME_FIELDS[field_index][1],
+                reply_markup=_game_form_back_markup(
+                    field_index
+                ),
+            )
+            return
+
+        try:
+            current_index = int(back_target)
+        except ValueError:
+            return
+
+        form = context.user_data.get("game_form")
+        if (
+            not form
+            or current_index <= 0
+            or form.get("field_index") != current_index
+        ):
+            return
+
+        previous_index = current_index - 1
+        form["field_index"] = previous_index
+
+        await query.edit_message_text(
+            GAME_FIELDS[previous_index][1],
+            reply_markup=_game_form_back_markup(
+                previous_index
+            ),
+        )
+        return
 
     pending = context.user_data.get(
         "game_form_pending"

@@ -216,6 +216,35 @@ def add_game_with_limit(
 
 
 
+def get_known_chat_ids():
+    """Return chat IDs already known to the bot.
+
+    This intentionally combines several persistent tables so private
+    /cipagames can recover the source group even when no game exists yet.
+    """
+    with get_db() as db:
+        rows = db.execute(
+            """
+            SELECT chat_id FROM games
+            UNION
+            SELECT chat_id FROM messages
+            UNION
+            SELECT chat_id FROM daily_report_usage
+            UNION
+            SELECT chat_id FROM daily_cipa_visuals
+            UNION
+            SELECT chat_id FROM cipa_portrait_visuals
+            ORDER BY chat_id
+            """
+        ).fetchall()
+
+    return [
+        int(row["chat_id"])
+        for row in rows
+        if row["chat_id"] is not None
+    ]
+
+
 def get_active_games_count(chat_id):
     refresh_game_statuses(chat_id)
     with get_db() as db:
