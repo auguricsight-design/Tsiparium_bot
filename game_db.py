@@ -216,6 +216,24 @@ def add_game_with_limit(
 
 
 
+def get_game_chat_ids():
+    """Return chat IDs that already have game records."""
+    with get_db() as db:
+        rows = db.execute(
+            """
+            SELECT DISTINCT chat_id
+            FROM games
+            ORDER BY chat_id
+            """
+        ).fetchall()
+
+    return [
+        int(row["chat_id"])
+        for row in rows
+        if row["chat_id"] is not None
+    ]
+
+
 def get_active_games_count(chat_id):
     refresh_game_statuses(chat_id)
     with get_db() as db:
