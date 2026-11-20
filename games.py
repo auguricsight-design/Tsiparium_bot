@@ -142,7 +142,7 @@ def _cipagames_menu_text(games_list):
     return text
 
 
-def _format_admin_cipagames_text(games_list):
+def _format_cipagames_text(games_list):
     if not games_list:
         return (
             "🎮 Активних ігор зараз немає.\n\n"
@@ -296,68 +296,33 @@ async def cipagames(update, context):
         )
         return
 
-    if await is_chat_admin(
-        chat.id,
-        user.id,
-        context,
-    ):
-        await message.reply_text(
-            "🎮 Що показати?",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "📋 Список активних ігор",
-                        callback_data=(
-                            f"{CIPAGAMES_ADMIN_LIST_PREFIX}"
-                            f"{chat.id}"
-                        ),
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🎮 В меню",
-                        callback_data=(
-                            f"{CIPAGAMES_ADMIN_MENU_PREFIX}"
-                            f"{chat.id}"
-                        ),
-                    )
-                ],
-            ]),
-        )
-        return
+    context.user_data[
+        "cipagames_source_chat_id"
+    ] = chat.id
 
-    try:
-        context.user_data[
-            "cipagames_source_chat_id"
-        ] = chat.id
-
-        await send_cipagames_menu(
-            context.bot,
-            user.id,
-            chat.id,
-        )
-
-        await message.reply_text(
-            "🐔 Активні ігри вже полетіли тобі в особисті."
-        )
-    except (Forbidden, BadRequest, TelegramError):
-        bot_info = await context.bot.get_me()
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton(
-                "🎮 Відкрити ігри в приваті",
-                url=(
-                    f"https://t.me/{bot_info.username}"
-                    f"?start=cipagames_{chat.id}"
-                ),
-            )
-        ]])
-
-        await message.reply_text(
-            "🐔 Я ще не можу написати тобі в особисті. "
-            "Відкрий приватний чат із ботом — "
-            "там покажу активні ігри.",
-            reply_markup=keyboard,
-        )
+    await message.reply_text(
+        "🎮 Що показати?",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "📋 Список активних ігор",
+                    callback_data=(
+                        f"{CIPAGAMES_ADMIN_LIST_PREFIX}"
+                        f"{chat.id}"
+                    ),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🎮 В меню",
+                    callback_data=(
+                        f"{CIPAGAMES_ADMIN_MENU_PREFIX}"
+                        f"{chat.id}"
+                    ),
+                )
+            ],
+        ]),
+    )
 
 
 async def cipagames_callback(update, context):
@@ -379,23 +344,12 @@ async def cipagames_callback(update, context):
         except ValueError:
             return
 
-        if not await is_chat_admin(
-            source_chat_id,
-            update.effective_user.id,
-            context,
-        ):
-            await query.answer(
-                "Ця опція доступна лише адмінам.",
-                show_alert=True,
-            )
-            return
-
         games_list = get_active_games(
             source_chat_id
         )
 
         await query.edit_message_text(
-            _format_admin_cipagames_text(
+            _format_cipagames_text(
                 games_list
             )
         )
@@ -409,17 +363,6 @@ async def cipagames_callback(update, context):
                 )
             )
         except ValueError:
-            return
-
-        if not await is_chat_admin(
-            source_chat_id,
-            update.effective_user.id,
-            context,
-        ):
-            await query.answer(
-                "Ця опція доступна лише адмінам.",
-                show_alert=True,
-            )
             return
 
         context.user_data[
