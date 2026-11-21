@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import base64
 import json
@@ -257,12 +258,35 @@ async def generate_daily_chicken_image(
         f"{visual_prompt}"
     )
 
-    result = await client.images.generate(
-        model=OPENAI_IMAGE_MODEL,
-        prompt=final_prompt,
-        size=OPENAI_IMAGE_SIZE,
-        quality=OPENAI_IMAGE_QUALITY,
-    )
+    max_attempts = 3
+    retry_delays = (5, 15)
+    result = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            result = await client.images.generate(
+                model=OPENAI_IMAGE_MODEL,
+                prompt=final_prompt,
+                size=OPENAI_IMAGE_SIZE,
+                quality=OPENAI_IMAGE_QUALITY,
+            )
+            break
+
+        except Exception:
+            logger.exception(
+                "[%s] Daily Cipa image generation failed | "
+                "attempt=%s/%s",
+                human_log_time(),
+                attempt,
+                max_attempts,
+            )
+
+            if attempt >= max_attempts:
+                raise
+
+            await asyncio.sleep(
+                retry_delays[attempt - 1]
+            )
 
     image_base64 = (
         result.data[0].b64_json
