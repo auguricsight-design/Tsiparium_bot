@@ -421,6 +421,27 @@ async def daily_chicken_image_job(
             )
 
 
+async def _is_daily_cipa_admin(
+    message,
+    user,
+    context,
+):
+    # Telegram sends commands from anonymous group admins
+    # on behalf of the group itself. In that case from_user
+    # is not the real admin, while sender_chat is the group.
+    if (
+        message.sender_chat
+        and message.sender_chat.id == message.chat_id
+    ):
+        return True
+
+    return await is_chat_admin(
+        chat_id=message.chat_id,
+        user_id=user.id,
+        context=context,
+    )
+
+
 async def dailycipa(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -432,9 +453,9 @@ async def dailycipa(
         return
 
     try:
-        admin = await is_chat_admin(
-            chat_id=message.chat_id,
-            user_id=user.id,
+        admin = await _is_daily_cipa_admin(
+            message=message,
+            user=user,
             context=context,
         )
 
@@ -445,16 +466,22 @@ async def dailycipa(
             message.chat_id,
         )
 
-        await message.reply_text(
-            "🐔 Не вдалося перевірити "
-            "права адміністратора."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "🐔 Не вдалося перевірити "
+                "права адміністратора."
+            ),
         )
         return
 
     if not admin:
-        await message.reply_text(
-            "🐔 Команда /dailycipa доступна "
-            "тільки адміністраторам чату."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "🐔 Команда /dailycipa доступна "
+                "тільки адміністраторам чату."
+            ),
         )
         return
 
@@ -501,9 +528,9 @@ async def dailycipawhy(
         return
 
     try:
-        admin = await is_chat_admin(
-            chat_id=message.chat_id,
-            user_id=user.id,
+        admin = await _is_daily_cipa_admin(
+            message=message,
+            user=user,
             context=context,
         )
 
@@ -514,17 +541,23 @@ async def dailycipawhy(
             message.chat_id,
         )
 
-        await message.reply_text(
-            "🐔 Не вдалося перевірити "
-            "права адміністратора."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "🐔 Не вдалося перевірити "
+                "права адміністратора."
+            ),
         )
         return
 
     if not admin:
-        await message.reply_text(
-            "🐔 Команда /dailycipawhy "
-            "доступна тільки "
-            "адміністраторам чату."
+        await context.bot.send_message(
+            chat_id=message.chat_id,
+            text=(
+                "🐔 Команда /dailycipawhy "
+                "доступна тільки "
+                "адміністраторам чату."
+            ),
         )
         return
 
