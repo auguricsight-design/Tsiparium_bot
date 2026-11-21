@@ -259,7 +259,7 @@ async def generate_daily_chicken_image(
     )
 
     max_attempts = 3
-    retry_delays = (5, 15)
+    retry_delays = (60, 300)
     result = None
 
     for attempt in range(1, max_attempts + 1):
